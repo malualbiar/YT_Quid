@@ -58,55 +58,59 @@
     </form>
 
     <!-- Video Table -->
-    <div class="bg-dark-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl">
-        <table class="w-full text-left border-collapse">
+    <div class="bg-dark-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl overflow-x-auto">
+        <table class="w-full text-left border-collapse min-w-[480px]">
             <thead>
                 <tr class="border-b border-zinc-800 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 bg-zinc-950/50">
-                    <th class="py-3.5 px-6">Song Title</th>
-                    <th class="py-3.5 px-6">Artist / Channel</th>
-                    <th class="py-3.5 px-6">Published</th>
-                    <th class="py-3.5 px-6 text-right">Total Views</th>
-                    <th class="py-3.5 px-6 text-right">Views Today</th>
-                    <th class="py-3.5 px-6 text-right">Likes</th>
-                    <th class="py-3.5 px-6 text-right">Like Rate</th>
-                    <th class="py-3.5 px-6 text-right">Action</th>
+                    <th class="py-3.5 px-4 md:px-6">Song Title</th>
+                    <th class="py-3.5 px-4 md:px-6 hidden sm:table-cell">Artist</th>
+                    <th class="py-3.5 px-4 md:px-6 hidden lg:table-cell">Published</th>
+                    <th class="py-3.5 px-4 md:px-6 text-right">Views</th>
+                    <th class="py-3.5 px-4 md:px-6 text-right hidden sm:table-cell">Today</th>
+                    <th class="py-3.5 px-4 md:px-6 text-right hidden lg:table-cell">Likes</th>
+                    <th class="py-3.5 px-4 md:px-6 text-right hidden xl:table-cell">Like Rate</th>
+                    <th class="py-3.5 px-4 md:px-6 text-right"></th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-zinc-800/60 text-xs">
                 {% for video in page_obj %}
                 <tr class="hover:bg-zinc-800/30 transition-colors group">
-                    <td class="py-3.5 px-6">
-                        <div class="flex items-center gap-3">
-                            <img src="{{ video.thumbnail_url }}" class="w-16 h-10 object-cover rounded-lg bg-zinc-800 shrink-0 group-hover:ring-1 group-hover:ring-emerald-500/50 transition-all">
-                            <div class="truncate max-w-xs">
+                    <td class="py-3 px-4 md:py-3.5 md:px-6">
+                        <div class="flex items-center gap-2.5 md:gap-3">
+                            <img src="{{ video.thumbnail_url }}" class="w-14 h-9 md:w-16 md:h-10 object-cover rounded-lg bg-zinc-800 shrink-0 group-hover:ring-1 group-hover:ring-emerald-500/50 transition-all">
+                            <div class="truncate max-w-[140px] sm:max-w-xs">
                                 <a href="{% url 'video_detail' video.id %}" class="font-semibold text-white hover:text-emerald-400 transition-colors block truncate">
                                     {{ video.title }}
                                 </a>
                                 <span class="text-[10px] text-zinc-400 font-mono">{{ video.duration }}</span>
+                                <!-- Artist shown inline on mobile only -->
+                                <span class="sm:hidden text-[10px] text-zinc-500 block truncate">{{ video.artist.stage_name }}</span>
                             </div>
                         </div>
                     </td>
-                    <td class="py-3.5 px-6">
+                    <td class="py-3.5 px-4 md:px-6 hidden sm:table-cell">
                         <p class="font-medium text-white">{{ video.artist.stage_name }}</p>
                         <p class="text-[10px] text-zinc-400">{{ video.channel.channel_name }}</p>
                     </td>
-                    <td class="py-3.5 px-6 text-zinc-400 text-[11px]">
+                    <td class="py-3.5 px-4 md:px-6 text-zinc-400 text-[11px] hidden lg:table-cell">
                         {{ video.published_at|date:"M d, Y" }}
                     </td>
-                    <td class="py-3.5 px-6 text-right font-bold text-white">
+                    <td class="py-3.5 px-4 md:px-6 text-right font-bold text-white whitespace-nowrap">
                         {{ video.current_views|intcomma }}
+                        <!-- Today shown inline on mobile only -->
+                        <span class="sm:hidden block text-[10px] font-semibold text-emerald-400">+{{ video.views_today|intcomma }}</span>
                     </td>
-                    <td class="py-3.5 px-6 text-right font-semibold text-emerald-400">
+                    <td class="py-3.5 px-4 md:px-6 text-right font-semibold text-emerald-400 hidden sm:table-cell whitespace-nowrap">
                         +{{ video.views_today|intcomma }}
                     </td>
-                    <td class="py-3.5 px-6 text-right text-zinc-300">
+                    <td class="py-3.5 px-4 md:px-6 text-right text-zinc-300 hidden lg:table-cell">
                         {{ video.current_likes|intcomma }}
                     </td>
-                    <td class="py-3.5 px-6 text-right text-zinc-300">
+                    <td class="py-3.5 px-4 md:px-6 text-right text-zinc-300 hidden xl:table-cell">
                         {{ video.like_rate }}%
                     </td>
-                    <td class="py-3.5 px-6 text-right">
-                        <a href="{% url 'video_detail' video.id %}" class="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-white text-[11px] font-medium transition-colors">
+                    <td class="py-3.5 px-4 md:px-6 text-right">
+                        <a href="{% url 'video_detail' video.id %}" class="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-white text-[11px] font-medium transition-colors whitespace-nowrap">
                             Analytics
                         </a>
                     </td>

@@ -72,6 +72,7 @@
             border: 1px solid rgba(255, 255, 255, 0.08);
         }
 
+        /* ── Desktop sidebar collapse ── */
         .sidebar-shell {
             width: var(--sidebar-width);
             transition: width 0.28s ease, opacity 0.2s ease, transform 0.28s ease;
@@ -149,6 +150,72 @@
             overflow: hidden;
             pointer-events: none;
         }
+
+        /* ── Mobile sidebar drawer ── */
+        #sidebar-overlay {
+            display: none;
+        }
+        #sidebar-overlay.active {
+            display: block;
+        }
+
+        /* On mobile the sidebar is an off-canvas drawer */
+        @media (max-width: 767px) {
+            #sidebar {
+                position: fixed !important;
+                top: 0;
+                left: 0;
+                height: 100dvh;
+                z-index: 50;
+                transform: translateX(-100%);
+                transition: transform 0.28s ease;
+                width: var(--sidebar-width) !important;
+            }
+            #sidebar.mobile-open {
+                transform: translateX(0);
+            }
+            /* Never apply desktop collapse on mobile */
+            body.sidebar-collapsed #sidebar {
+                width: var(--sidebar-width) !important;
+            }
+            body.sidebar-collapsed .sidebar-brand-copy,
+            body.sidebar-collapsed .sidebar-section-title,
+            body.sidebar-collapsed .sidebar-label,
+            body.sidebar-collapsed .user-meta,
+            body.sidebar-collapsed .nav-badge {
+                opacity: 1;
+                width: auto;
+                overflow: visible;
+                pointer-events: auto;
+                transform: none;
+            }
+            body.sidebar-collapsed .brand-logo {
+                display: block !important;
+                opacity: 1;
+                width: auto !important;
+                min-width: auto !important;
+                max-width: none !important;
+                overflow: visible;
+                pointer-events: auto;
+                transform: none;
+            }
+            body.sidebar-collapsed .sidebar-nav-link.flex {
+                gap: 0.75rem;
+                padding-left: 0.75rem;
+                padding-right: 0.75rem;
+            }
+            body.sidebar-collapsed .sidebar-nav-link.flex .nav-text {
+                opacity: 1;
+                width: auto;
+                margin: 0;
+                overflow: visible;
+                transform: none;
+            }
+            /* Hide the desktop collapse toggle on mobile */
+            #sidebarToggleBtn {
+                display: none !important;
+            }
+        }
     </style>
     {% block extra_head %}{% endblock %}
 </head>
@@ -159,19 +226,25 @@
                 if (localStorage.getItem('ytquid-sidebar-collapsed') === '1') {
                     document.body.classList.add('sidebar-collapsed');
                 }
-            } catch (e) {
-                // ignore storage failures
-            }
+            } catch (e) {}
         })();
     </script>
 
+    <!-- Mobile sidebar backdrop overlay -->
+    <div id="sidebar-overlay" class="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm" onclick="closeMobileSidebar()"></div>
+
     <div class="flex flex-1 h-screen w-full overflow-hidden">
-        <!-- Sidebar (Fixed & Persistent) -->
+        <!-- Sidebar (Fixed & Persistent on desktop; off-canvas drawer on mobile) -->
         <aside id="sidebar" class="sidebar-shell bg-dark-900 border-r border-zinc-800/80 flex flex-col h-full z-30 shrink-0 select-none">
             <!-- Brand Header -->
             <div class="h-16 flex items-center px-3 border-b border-zinc-800/80 gap-3 shrink-0">
+                <!-- Desktop collapse toggle (hidden on mobile via CSS) -->
                 <button id="sidebarToggleBtn" type="button" class="w-9 h-9 rounded-lg border border-zinc-700 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors flex items-center justify-center shrink-0" aria-label="Toggle sidebar">
                     <i id="sidebarToggleIcon" data-lucide="chevrons-left" class="w-4 h-4"></i>
+                </button>
+                <!-- Mobile close button (hidden on desktop) -->
+                <button id="mobileSidebarClose" type="button" onclick="closeMobileSidebar()" class="md:hidden w-9 h-9 rounded-lg border border-zinc-700 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors flex items-center justify-center shrink-0" aria-label="Close menu">
+                    <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
                 <img src="/static/img/favicon.svg" class="brand-logo w-9 h-9 rounded-xl shadow-lg shadow-emerald-500/20 shrink-0" alt="YT Quid Logo">
                 <div class="sidebar-brand-copy min-w-0 transition-all duration-200">
@@ -183,26 +256,26 @@
                 </div>
             </div>
 
-            <!-- Navigation Links (Scrollable independently if tall) -->
+            <!-- Navigation Links -->
             <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-1">
                 <div class="sidebar-section-title px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 transition-all duration-200">Main Menu</div>
-                
-                <a href="{% url 'dashboard' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'dashboard' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
+
+                <a href="{% url 'dashboard' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'dashboard' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="layout-dashboard" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Dashboard</span>
                 </a>
 
-                <a href="{% url 'artist_list' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if 'artist' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'artist_list' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if 'artist' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="mic-2" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Artists</span>
                 </a>
 
-                <a href="{% url 'channels_list' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'channels_list' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'channels_list' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'channels_list' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="tv-2" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Channels</span>
                 </a>
 
-                <a href="{% url 'video_list' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if 'video' in request.resolver_match.url_name and 'studio' not in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'video_list' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if 'video' in request.resolver_match.url_name and 'studio' not in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="film" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Videos &amp; Songs</span>
                 </a>
@@ -211,37 +284,37 @@
                     Creator Studio
                 </div>
 
-                <a href="{% url 'lyrics_maker' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if 'lyrics' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'lyrics_maker' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if 'lyrics' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="sparkles" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Lyrics Video Studio</span>
                 </a>
 
-                <a href="{% url 'shorts_maker' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if 'shorts' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'shorts_maker' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if 'shorts' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="scissors" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Shorts Maker</span>
                 </a>
 
-                <a href="{% url 'mix_maker' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if 'mix' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'mix_maker' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if 'mix' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="disc-3" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Non-Stop Mix Studio</span>
                 </a>
 
-                <a href="{% url 'studio_home' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'studio_home' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'studio_home' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'studio_home' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="video" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">1-Hour Loop Studio</span>
                 </a>
 
-                <a href="{% url 'automation_dashboard' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if 'automation' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'automation_dashboard' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if 'automation' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="cpu" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Automation</span>
                 </a>
 
-                <a href="{% url 'radar_feed' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if 'radar' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'radar_feed' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if 'radar' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="radio" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">AI Music Radar</span>
                 </a>
 
-                <a href="{% url 'downloader_home' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if 'downloader' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'downloader_home' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if 'downloader' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="download-cloud" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">YT Downloader</span>
                 </a>
@@ -250,39 +323,39 @@
                     Publishing
                 </div>
 
-                <a href="{% url 'publishing_dashboard' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'publishing_dashboard' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'publishing_dashboard' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'publishing_dashboard' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="upload-cloud" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">YouTube Publishing</span>
                 </a>
 
-                <a href="{% url 'publishing_queue' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'publishing_queue' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'publishing_queue' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'publishing_queue' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="list-ordered" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Queue &amp; History</span>
                 </a>
 
                 <div class="sidebar-section-title pt-4 px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 transition-all duration-200">Intelligence</div>
 
-                <a href="{% url 'artist_comparison' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if 'comparison' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'artist_comparison' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if 'comparison' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="columns-2" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Comparisons</span>
                 </a>
 
-                <a href="{% url 'revenue_prediction' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if 'revenue' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'revenue_prediction' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if 'revenue' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="trending-up" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Revenue Forecasting</span>
                 </a>
 
-                <a href="{% url 'reports' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if 'report' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'reports' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if 'report' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="file-spreadsheet" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Reports &amp; Export</span>
                 </a>
 
-                <a href="{% url 'milestones_list' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'milestones_list' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'milestones_list' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'milestones_list' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="award" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Milestones</span>
                 </a>
 
-                <a href="{% url 'notifications_list' %}" class="sidebar-nav-link flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'notifications_list' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'notifications_list' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'notifications_list' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
                     <div class="flex items-center gap-3 min-w-0">
                         <i data-lucide="bell" class="w-4 h-4 text-white shrink-0"></i>
                         <span class="nav-text">Alerts</span>
@@ -294,32 +367,32 @@
 
                 <div class="sidebar-section-title pt-4 px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 transition-all duration-200">System</div>
 
-                <a href="{% url 'api_usage' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'api_usage' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'api_usage' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'api_usage' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="activity" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">API Quota Usage</span>
                 </a>
 
-                <a href="{% url 'sync_logs' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'sync_logs' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'sync_logs' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'sync_logs' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="history" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Sync Logs</span>
                 </a>
 
                 {% if user.is_super_admin %}
-                <a href="{% url 'users_manage' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'users_manage' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'users_manage' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'users_manage' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="users" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Team / Users</span>
                 </a>
-                <a href="{% url 'system_settings' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'system_settings' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
+                <a href="{% url 'system_settings' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'system_settings' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="sliders" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Settings</span>
                 </a>
                 {% endif %}
             </nav>
 
-            <!-- Bottom User Card (Fixed & Permanently Pinned) -->
+            <!-- Bottom User Card -->
             <div class="p-3 border-t border-zinc-800/80 bg-dark-950/60 shrink-0 mt-auto">
                 <div class="sidebar-user-card flex items-center justify-between p-2 rounded-lg bg-dark-800/60 border border-zinc-800/60 hover:border-zinc-700/80 transition-all">
-                    <a href="{% url 'profile' %}" class="flex items-center gap-2.5 overflow-hidden flex-1 group" title="Manage Profile">
+                    <a href="{% url 'profile' %}" onclick="closeMobileSidebar()" class="flex items-center gap-2.5 overflow-hidden flex-1 group" title="Manage Profile">
                         <div class="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-xs shrink-0 border border-emerald-500/30 group-hover:scale-105 transition-transform">
                             {{ user.first_name|default:user.username|slice:":1"|upper }}
                         </div>
@@ -335,25 +408,46 @@
             </div>
         </aside>
 
-        <!-- Main Content Area (Independent scroll) -->
+        <!-- Main Content Area -->
         <div class="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
-            <!-- Top Header Bar (Fixed at top of main area) -->
-            <header class="h-16 bg-dark-900 border-b border-zinc-800/80 px-6 flex items-center justify-between shrink-0 z-20">
-                <div class="flex items-center gap-3">
-                    <!-- Search Button -->
-                    <button onclick="openSearchModal()" class="flex items-center gap-3 px-3.5 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 transition-all text-xs w-72">
+            <!-- Top Header Bar -->
+            <header class="h-14 md:h-16 bg-dark-900 border-b border-zinc-800/80 px-3 md:px-6 flex items-center justify-between shrink-0 z-20 gap-3">
+                <!-- Left: hamburger (mobile) + search (desktop) -->
+                <div class="flex items-center gap-3 min-w-0 flex-1">
+                    <!-- Mobile hamburger -->
+                    <button id="mobileMenuBtn" type="button" onclick="openMobileSidebar()" class="md:hidden w-9 h-9 rounded-lg border border-zinc-700 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors flex items-center justify-center shrink-0" aria-label="Open menu">
+                        <i data-lucide="menu" class="w-4 h-4"></i>
+                    </button>
+
+                    <!-- Mobile page title / logo -->
+                    <div class="md:hidden flex items-center gap-2 min-w-0">
+                        <img src="/static/img/favicon.svg" class="w-6 h-6 rounded-md shrink-0" alt="YT Quid">
+                        <span class="text-sm font-bold text-white truncate">YT Quid</span>
+                    </div>
+
+                    <!-- Desktop search bar -->
+                    <button onclick="openSearchModal()" class="hidden md:flex items-center gap-3 px-3.5 py-1.5 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 transition-all text-xs w-72">
                         <i data-lucide="search" class="w-3.5 h-3.5 text-zinc-400"></i>
                         <span class="flex-1 text-left">Search artists, videos, channels...</span>
                         <kbd class="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-[10px] font-mono text-zinc-400">Ctrl K</kbd>
                     </button>
                 </div>
 
-                <!-- Action Controls -->
-                <div class="flex items-center gap-3">
+                <!-- Right: action controls -->
+                <div class="flex items-center gap-2">
+                    <!-- Mobile search icon -->
+                    <button onclick="openSearchModal()" class="md:hidden w-9 h-9 rounded-lg border border-zinc-700 bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors flex items-center justify-center shrink-0" aria-label="Search">
+                        <i data-lucide="search" class="w-4 h-4"></i>
+                    </button>
+
                     {% if user.can_manage_channels %}
-                    <button onclick="triggerChannelSync('{% url 'sync_all_channels' %}')" class="flex items-center gap-2 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-zinc-950 text-xs font-semibold rounded-lg shadow-sm shadow-emerald-500/20 transition-all cursor-pointer">
+                    <!-- Desktop: full label; mobile: icon only -->
+                    <button onclick="triggerChannelSync('{% url 'sync_all_channels' %}')" class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-zinc-950 text-xs font-semibold rounded-lg shadow-sm shadow-emerald-500/20 transition-all cursor-pointer">
                         <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-                        Sync All Channels
+                        Sync All
+                    </button>
+                    <button onclick="triggerChannelSync('{% url 'sync_all_channels' %}')" class="sm:hidden w-9 h-9 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-zinc-950 transition-colors flex items-center justify-center shrink-0" aria-label="Sync channels">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                     </button>
                     {% endif %}
 
@@ -369,14 +463,14 @@
 
             <!-- Alerts Container -->
             {% if messages %}
-            <div class="px-6 pt-4 space-y-2">
+            <div class="px-3 md:px-6 pt-3 space-y-2">
                 {% for message in messages %}
                 <div class="flex items-center justify-between px-4 py-3 rounded-lg text-xs font-medium border {% if message.tags == 'success' %}bg-emerald-500/10 border-emerald-500/20 text-emerald-400{% elif message.tags == 'error' %}bg-red-500/10 border-red-500/20 text-red-400{% elif message.tags == 'warning' %}bg-amber-500/10 border-amber-500/20 text-amber-400{% else %}bg-blue-500/10 border-blue-500/20 text-blue-400{% endif %}">
                     <div class="flex items-center gap-2">
-                        <i data-lucide="{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}alert-circle{% else %}info{% endif %}" class="w-4 h-4"></i>
+                        <i data-lucide="{% if message.tags == 'success' %}check-circle{% elif message.tags == 'error' %}alert-circle{% else %}info{% endif %}" class="w-4 h-4 shrink-0"></i>
                         <span>{{ message }}</span>
                     </div>
-                    <button onclick="this.parentElement.remove()" class="opacity-70 hover:opacity-100">
+                    <button onclick="this.parentElement.remove()" class="opacity-70 hover:opacity-100 shrink-0 ml-3">
                         <i data-lucide="x" class="w-3.5 h-3.5"></i>
                     </button>
                 </div>
@@ -385,21 +479,21 @@
             {% endif %}
 
             <!-- Page Body -->
-            <main class="flex-1 overflow-y-auto p-6">
+            <main class="flex-1 overflow-y-auto p-3 md:p-6">
                 {% block content %}{% endblock %}
             </main>
         </div>
     </div>
 
     <!-- Global Search Modal (Ctrl + K) -->
-    <div id="search-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-start justify-center pt-20 p-4">
-        <div class="bg-dark-900 border border-zinc-800 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+    <div id="search-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-start justify-center pt-16 md:pt-20 p-4">
+        <div class="bg-dark-900 border border-zinc-800 rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl">
             <div class="p-4 border-b border-zinc-800 flex items-center gap-3">
-                <i data-lucide="search" class="w-5 h-5 text-emerald-400"></i>
+                <i data-lucide="search" class="w-5 h-5 text-emerald-400 shrink-0"></i>
                 <input id="search-input" type="text" placeholder="Type artist name, video title, or channel..." class="w-full bg-transparent border-none text-sm text-white placeholder-zinc-400 focus:outline-none" autofocus>
-                <kbd class="px-2 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-400 font-mono">ESC</kbd>
+                <kbd class="px-2 py-0.5 rounded bg-zinc-800 text-[10px] text-zinc-400 font-mono shrink-0">ESC</kbd>
             </div>
-            <div id="search-results" class="max-h-96 overflow-y-auto p-2 space-y-4">
+            <div id="search-results" class="max-h-80 md:max-h-96 overflow-y-auto p-2 space-y-4">
                 <div class="p-8 text-center text-zinc-400 text-xs">
                     Start typing to search monitored artists, songs, and channels...
                 </div>
@@ -411,29 +505,20 @@
         const body = document.body;
         const key = 'ytquid-sidebar-collapsed';
 
+        /* ── Desktop sidebar collapse ── */
         function setSidebarState(collapsed) {
             body.classList.toggle('sidebar-collapsed', collapsed);
 
             const sidebarToggleIcon = document.getElementById('sidebarToggleIcon');
-            const desktopButton = document.getElementById('desktopSidebarToggle');
-            const desktopIcon = desktopButton ? desktopButton.querySelector('i') : null;
-
             if (sidebarToggleIcon) {
                 sidebarToggleIcon.setAttribute('data-lucide', collapsed ? 'chevrons-right' : 'chevrons-left');
-            }
-            if (desktopIcon) {
-                desktopIcon.setAttribute('data-lucide', collapsed ? 'chevrons-right' : 'chevrons-left');
             }
 
             try {
                 localStorage.setItem(key, collapsed ? '1' : '0');
-            } catch (e) {
-                // ignore storage failures in private browsing
-            }
+            } catch (e) {}
 
-            if (window.lucide) {
-                lucide.createIcons();
-            }
+            if (window.lucide) lucide.createIcons();
         }
 
         function toggleSidebar() {
@@ -441,9 +526,28 @@
             setSidebarState(collapsed);
         }
 
+        /* ── Mobile sidebar drawer ── */
+        function openMobileSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            sidebar.classList.add('mobile-open');
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeMobileSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            // Only act on mobile viewports
+            if (window.innerWidth < 768) {
+                sidebar.classList.remove('mobile-open');
+                overlay.classList.remove('active');
+                document.body.style.overflow = '';
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
             const sidebarToggle = document.getElementById('sidebarToggleBtn');
-            const desktopSidebarToggle = document.getElementById('desktopSidebarToggle');
 
             try {
                 const saved = localStorage.getItem(key);
@@ -452,20 +556,26 @@
                 setSidebarState(false);
             }
 
-            [sidebarToggle, desktopSidebarToggle].forEach((button) => {
-                if (!button) return;
-                button.addEventListener('click', function (event) {
+            if (sidebarToggle) {
+                sidebarToggle.addEventListener('click', function (event) {
                     event.preventDefault();
                     event.stopPropagation();
                     toggleSidebar();
                 });
+            }
+
+            // Close mobile sidebar on resize to desktop width
+            window.addEventListener('resize', function () {
+                if (window.innerWidth >= 768) {
+                    closeMobileSidebar();
+                }
             });
         });
 
         // Initialize Lucide icons
         lucide.createIcons();
 
-        // Search modal logic
+        /* ── Search modal ── */
         const modal = document.getElementById('search-modal');
         const searchInput = document.getElementById('search-input');
         const searchResults = document.getElementById('search-results');
@@ -473,7 +583,7 @@
         function openSearchModal() {
             modal.classList.remove('hidden');
             modal.classList.add('flex');
-            searchInput.focus();
+            setTimeout(() => searchInput.focus(), 50);
         }
 
         function closeSearchModal() {
@@ -553,9 +663,7 @@
             const chevron = document.getElementById('studio-menu-chevron');
             if (items) {
                 items.classList.toggle('hidden');
-                if (chevron) {
-                    chevron.classList.toggle('-rotate-90');
-                }
+                if (chevron) chevron.classList.toggle('-rotate-90');
             }
         }
 
@@ -581,16 +689,12 @@
                 return;
             }
 
-            // Reset UI
             modal.classList.remove('hidden');
             if (progressBar) {
                 progressBar.style.width = '15%';
                 progressBar.className = 'bg-emerald-500 h-full rounded-full transition-all duration-500 ease-out';
             }
-            if (percentLabel) {
-                percentLabel.textContent = '15%';
-                percentLabel.className = 'text-emerald-400 font-mono font-bold';
-            }
+            if (percentLabel) { percentLabel.textContent = '15%'; percentLabel.className = 'text-emerald-400 font-mono font-bold'; }
             if (statusLabel) statusLabel.textContent = 'Connecting to YouTube API...';
             if (modalTitle) modalTitle.textContent = 'Syncing YouTube Data...';
             if (modalSubtitle) modalSubtitle.textContent = 'Fetching latest channel metrics & video analytics';
@@ -598,7 +702,6 @@
             if (modalGlow) modalGlow.className = 'absolute -top-24 -left-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none';
             if (spinnerIcon) spinnerIcon.classList.add('animate-spin');
 
-            // Simulate progress while backend works
             let currentPct = 15;
             const stages = [
                 { pct: 35, text: 'Fetching channel statistics...' },
@@ -620,17 +723,12 @@
 
             fetch(url, {
                 method: 'GET',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'application/json'
-                }
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
             })
             .then(async res => {
                 clearInterval(syncProgressInterval);
                 const data = await res.json().catch(() => null);
-                if (!res.ok) {
-                    throw new Error((data && (data.error || data.message)) || `Server returned ${res.status}`);
-                }
+                if (!res.ok) throw new Error((data && (data.error || data.message)) || `Server returned ${res.status}`);
                 return data;
             })
             .then(data => {
@@ -642,11 +740,7 @@
                     if (modalTitle) modalTitle.textContent = 'Sync Complete!';
                     if (modalSubtitle) modalSubtitle.textContent = 'Metrics updated successfully.';
                     if (spinnerIcon) spinnerIcon.classList.remove('animate-spin');
-
-                    // Stay on current page and reload after short delay so fresh metrics render
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 750);
+                    setTimeout(() => { window.location.reload(); }, 750);
                 } else {
                     const errMsg = (data && (data.error || data.message || data.error_message)) || 'Encountered sync errors';
                     handleSyncFailure(errMsg, (data && data.logs_url) || '/system/logs/');
@@ -662,21 +756,14 @@
                     progressBar.style.width = '100%';
                     progressBar.className = 'bg-rose-500 h-full rounded-full transition-all duration-300';
                 }
-                if (percentLabel) {
-                    percentLabel.textContent = 'Error';
-                    percentLabel.className = 'text-rose-400 font-mono font-bold';
-                }
+                if (percentLabel) { percentLabel.textContent = 'Error'; percentLabel.className = 'text-rose-400 font-mono font-bold'; }
                 if (statusLabel) statusLabel.textContent = errorText;
                 if (modalTitle) modalTitle.textContent = 'Sync Failed';
                 if (modalSubtitle) modalSubtitle.textContent = 'Redirecting to audit logs for error details...';
                 if (iconContainer) iconContainer.className = 'w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0';
                 if (modalGlow) modalGlow.className = 'absolute -top-24 -left-24 w-48 h-48 bg-rose-500/10 rounded-full blur-3xl pointer-events-none';
                 if (spinnerIcon) spinnerIcon.classList.remove('animate-spin');
-
-                // Only redirect to logs when there's an error
-                setTimeout(() => {
-                    window.location.href = redirectUrl || '/system/logs/';
-                }, 1400);
+                setTimeout(() => { window.location.href = redirectUrl || '/system/logs/'; }, 1400);
             }
         }
     </script>
@@ -684,7 +771,6 @@
     <!-- Synchronization Loading Modal -->
     <div id="syncLoadingModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md hidden transition-opacity duration-300">
         <div class="bg-dark-900 border border-zinc-700/80 rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl relative overflow-hidden">
-            <!-- Glow background accent -->
             <div id="syncModalGlow" class="absolute -top-24 -left-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
             <div class="flex items-center gap-4 mb-4 relative z-10">
@@ -697,10 +783,9 @@
                 </div>
             </div>
 
-            <!-- Progress Bar Container -->
             <div class="space-y-2 mt-4 relative z-10">
                 <div class="flex justify-between text-xs">
-                    <span id="syncStatusLabel" class="text-zinc-300 font-medium truncate max-w-[280px]">Connecting to YouTube API...</span>
+                    <span id="syncStatusLabel" class="text-zinc-300 font-medium truncate max-w-[240px]">Connecting to YouTube API...</span>
                     <span id="syncPercentLabel" class="text-emerald-400 font-mono font-bold">15%</span>
                 </div>
                 <div class="w-full bg-zinc-950 rounded-full h-2.5 overflow-hidden border border-zinc-800 relative">
