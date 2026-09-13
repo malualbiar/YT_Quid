@@ -2,8 +2,13 @@ services:
   - type: web
     name: yt-quid
     runtime: python
+    plan: free
     buildCommand: "./build.sh"
-    startCommand: "gunicorn core.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
+    # 1 worker keeps memory within the free tier's 512 MB limit.
+    # SQLite is used (no DATABASE_URL set) — the db file lives in the
+    # ephemeral filesystem; it resets on each deploy, which is fine for
+    # the demo data seeded by build.sh.
+    startCommand: "gunicorn core.wsgi:application --bind 0.0.0.0:$PORT --workers 1 --timeout 120"
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.0"
@@ -17,12 +22,7 @@ services:
         value: ""          # Leave blank; RENDER_EXTERNAL_HOSTNAME is picked up automatically
       - key: DJANGO_SETTINGS_MODULE
         value: core.settings
-      # Bind the managed PostgreSQL database below
-      - key: DATABASE_URL
-        fromDatabase:
-          name: yt-quid-db
-          property: connectionString
-      # Fill these in the Render dashboard or via the CLI:
+      # Fill these in the Render dashboard after the first deploy:
       - key: YOUTUBE_API_KEY
         sync: false
       - key: GOOGLE_OAUTH_CLIENT_ID
@@ -35,13 +35,11 @@ services:
         value: UTC
       - key: SYNC_INTERVAL_HOURS
         value: "6"
-    disk:
-      name: media
-      mountPath: /opt/render/project/src/media
-      sizeGB: 5
-
-databases:
-  - name: yt-quid-db
-    databaseName: ytquid
-    user: ytquid
-    plan: free
+    # No disk block — persistent disks are paid.
+    # Media files (generated videos, downloads) are written to the
+    # ephemeral filesystem and will be lost on redeploy.
+    # Upgrade to a paid plan and uncomment the block below to persist them:
+    # disk:
+    #   name: media
+    #   mountPath: /opt/render/project/src/media
+    #   sizeGB: 5
