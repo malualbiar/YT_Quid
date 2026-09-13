@@ -4,15 +4,16 @@ Django settings for YoutubeAnalytics project.
 
 from pathlib import Path
 import os
-from dotenv import load_dotenv
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 import sys
+import dj_database_url
+from dotenv import load_dotenv
 
 if getattr(sys, 'frozen', False):
     BASE_DIR = Path(getattr(sys, '_MEIPASS', os.path.dirname(sys.executable)))
 else:
     BASE_DIR = Path(__file__).resolve().parent.parent
+
+IS_RENDER = os.getenv('RENDER', '') == 'true'
 
 # Load environment variables from .env file
 load_dotenv(BASE_DIR / '.env')
@@ -25,7 +26,18 @@ SECRET_KEY = os.getenv(
 
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = list(set([h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver').split(',') if h.strip()] + ['testserver', '127.0.0.1', 'localhost']))
+_allowed = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h.strip()]
+_allowed += ['testserver', '127.0.0.1', 'localhost']
+# On Render, RENDER_EXTERNAL_HOSTNAME is set automatically.
+_render_host = os.getenv('RENDER_EXTERNAL_HOSTNAME', '')
+if _render_host:
+    _allowed.append(_render_host)
+ALLOWED_HOSTS = list(set(_allowed))
+
+# Render requires HTTPS; only enforce when DEBUG is off.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    CSRF_TRUSTED_ORIGINS = [f'https://{h}' for h in ALLOWED_HOSTS if h not in ('testserver', '127.0.0.1', 'localhost')]
 
 # Application definition
 INSTALLED_APPS = [
@@ -53,6 +65,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -82,25 +95,38 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'core.wsgi.application'
 
-# Database: SQLite for simple, lightweight local setup
-import sys
+# Database
+# On Render, DATABASE_URL is set automatically for PostgreSQL services.
+# Falls back to SQLite for local and desktop use.
 import shutil
 
-if getattr(sys, 'frozen', False) or os.getenv('YT_QUID_DESKTOP') == '1':
+if os.getenv('DATABASE_URL'):
+    DATABASES = {
+        'default': dj_database_url.config(
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    }
+elif getattr(sys, 'frozen', False) or os.getenv('YT_QUID_DESKTOP') == '1':
     DATA_DIR = Path(os.getenv('APPDATA', os.path.expanduser('~'))) / 'YTQuid' if os.name == 'nt' else Path.home() / '.config' / 'ytquid'
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     DB_PATH = DATA_DIR / 'db.sqlite3'
     if (DATA_DIR / '.env').exists():
         load_dotenv(DATA_DIR / '.env')
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': DB_PATH,
+        }
+    }
 else:
     DB_PATH = BASE_DIR / 'db.sqlite3'
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': DB_PATH,
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': DB_PATH,
+        }
     }
-}
 
 # Custom User Model
 AUTH_USER_MODEL = 'authentication.User'
@@ -131,6 +157,14 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+}
 
 # Media files
 MEDIA_URL = '/media/'

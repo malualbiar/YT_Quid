@@ -144,6 +144,51 @@ The repository includes a GitHub Actions workflow located at [`.github/workflows
 
 ---
 
+## ☁️ Deploying to Render
+
+YT Quid ships with a [`render.yaml`](render.yaml) Blueprint and a [`build.sh`](build.sh) script for one-click deployment on [Render](https://render.com).
+
+### Option A — One-Click Blueprint Deploy (Recommended)
+
+1. Push the repository to GitHub (or GitLab).
+2. In the Render Dashboard click **New → Blueprint** and select this repository.
+3. Render reads `render.yaml` and creates:
+   - A **Web Service** (`yt-quid`) running Gunicorn.
+   - A **PostgreSQL database** (`yt-quid-db`, free tier).
+4. In the **Environment** tab of the web service, fill in the secrets that have `sync: false`:
+   | Variable | Value |
+   | :--- | :--- |
+   | `YOUTUBE_API_KEY` | Your YouTube Data API v3 key |
+   | `GOOGLE_OAUTH_CLIENT_ID` | OAuth 2.0 client ID |
+   | `GOOGLE_OAUTH_CLIENT_SECRET` | OAuth 2.0 client secret |
+   | `GOOGLE_OAUTH_REDIRECT_URI` | `https://<your-service>.onrender.com/publishing/oauth/callback/` |
+5. Click **Save Changes** — Render triggers a fresh deploy automatically.
+
+### Option B — Manual Service Setup
+
+1. Create a **New Web Service** from your repository.
+2. Set runtime to **Python**, build command to `./build.sh`, and start command to:
+   ```
+   gunicorn core.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+   ```
+3. Add a **PostgreSQL** database and copy its **Internal Connection String** as `DATABASE_URL`.
+4. Set the environment variables listed in [`.env.example`](.env.example) — `DEBUG=false`, a strong `SECRET_KEY`, and your API credentials.
+
+### What the build script does
+
+The [`build.sh`](build.sh) script runs automatically on every deploy:
+1. Installs Python dependencies (`pip install -r requirements.txt`).
+2. Collects static files (`collectstatic`) — served by WhiteNoise directly from Gunicorn, no separate CDN needed.
+3. Applies database migrations (`migrate`).
+4. Seeds demo data on first deploy (`seed_demo_data`).
+
+### Notes
+- **Media uploads** are stored on a 5 GB persistent disk mounted at `/opt/render/project/src/media` (configured in `render.yaml`). Upgrade the disk size in the Render dashboard as your library grows.
+- **Google OAuth**: add `https://<your-service>.onrender.com/publishing/oauth/callback/` as an authorised redirect URI in your Google Cloud OAuth client.
+- The free-tier PostgreSQL database on Render is deleted after 90 days. Upgrade to a paid tier for a persistent production database.
+
+---
+
 ## 🌐 Running in Web Server Mode
 
 You can also run YT Quid as a standard web application:
