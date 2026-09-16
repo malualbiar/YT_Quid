@@ -12,10 +12,11 @@ class AnalyticsService:
     @staticmethod
     def get_dashboard_summary():
         """
-        Calculate key platform KPIs across all monitored artists and videos.
+        Calculate key platform KPIs across all monitored artists and videos in East African Time (EAT).
         """
         now = timezone.now()
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        local_now = timezone.localtime(now)
+        today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
         seven_days_ago = now - timedelta(days=7)
         thirty_days_ago = now - timedelta(days=30)
 
@@ -73,12 +74,15 @@ class AnalyticsService:
     @staticmethod
     def update_video_growth_metrics(video_ids=None, artist_id=None):
         """
-        Calculate and persist views_today, views_this_week, and views_this_month for active videos.
+        Calculate and persist views_today, views_this_week, and views_this_month for active videos
+        using East African Time boundaries.
         Handles new artists, initial sync baselines, release date bounding, and multi-snapshot deltas.
         """
         import math
         now = timezone.now()
-        today = now.date()
+        local_now = timezone.localtime(now)
+        today = local_now.date()
+        today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
         twenty_four_hours_ago = now - timedelta(days=1)
         seven_days_ago = now - timedelta(days=7)
         thirty_days_ago = now - timedelta(days=30)
@@ -100,13 +104,13 @@ class AnalyticsService:
 
         for v in videos:
             curr_v = v.current_views
-            pub = v.published_at.date() if v.published_at else today
+            pub = timezone.localtime(v.published_at).date() if v.published_at else today
             days_since_pub = max(0, (today - pub).days)
 
             # Snapshots analysis
             snaps = sorted(list(v.snapshots.all()), key=lambda s: s.recorded_at)
 
-            snaps_today = [s for s in snaps if s.recorded_at >= twenty_four_hours_ago]
+            snaps_today = [s for s in snaps if s.recorded_at >= today_start or s.recorded_at >= twenty_four_hours_ago]
             snaps_week = [s for s in snaps if s.recorded_at >= seven_days_ago]
             snaps_month = [s for s in snaps if s.recorded_at >= thirty_days_ago]
 
@@ -121,7 +125,7 @@ class AnalyticsService:
 
             # 1. Calculate views based on release timing and snapshot history
             if days_since_pub == 0:
-                v_today = curr_v
+                v_today = max(today_snaps_gain, curr_v)
                 v_week = curr_v
                 v_month = curr_v
             elif days_since_pub <= 7:
@@ -170,17 +174,18 @@ class AnalyticsService:
         if updated_videos:
             Video.objects.bulk_update(updated_videos, ['views_today', 'views_this_week', 'views_this_month'])
 
-
     @staticmethod
     def get_views_growth_chart_data(days=30, artist_id=None, video_id=None):
         """
-        Build aggregated day-by-day views growth and views gained time series for Chart.js.
-        Accurately aligns to real snapshot deltas or pro-rated historical growth, ensuring
-        cumulative views perfectly match current lifetime totals on the current date.
+        Build aggregated day-by-day views growth and views gained time series for Chart.js
+        aligned to East African Time (EAT / Africa/Nairobi).
+        Uses real snapshot delta measurements from the database whenever available,
+        and accurately anchors cumulative total views to real YouTube API counts.
         """
         import math
         now = timezone.now()
-        end_date = now.date()
+        local_now = timezone.localtime(now)
+        end_date = local_now.date()
         is_all_time = str(days).lower() in ['all', '0', 'all_time']
 
         # Fetch target videos
@@ -192,14 +197,16 @@ class AnalyticsService:
         
         videos = list(video_q.prefetch_related('snapshots'))
 
-        # Determine start date
+        # Determine start date in EAT
         if is_all_time:
             min_pub = None
             if videos:
-                min_pub = min((v.published_at for v in videos), default=None)
+                valid_pubs = [timezone.localtime(v.published_at).date() for v in videos if v.published_at]
+                if valid_pubs:
+                    min_pub = min(valid_pubs)
 
             if min_pub:
-                start_date = min_pub.date() - timedelta(days=1)
+                start_date = min_pub - timedelta(days=1)
             else:
                 start_date = end_date - timedelta(days=30)
 
@@ -212,7 +219,7 @@ class AnalyticsService:
                 days_int = 30
             start_date = end_date - timedelta(days=days_int)
 
-        # Generate complete date list
+        # Generate complete date list (in EAT)
         date_list = []
         cur = start_date
         while cur <= end_date:
@@ -225,76 +232,169 @@ class AnalyticsService:
         # Build trajectory for each video across the requested window
         video_trajectories = []
         for v in videos:
-            pub_date = v.published_at.date() if v.published_at else end_date
+            pub_date = timezone.localtime(v.published_at).date() if v.published_at else end_date
             curr_v = v.current_views
             v_gains = {d: 0 for d in date_list}
             v_cum = {d: 0 for d in date_list}
 
             if curr_v > 0:
-                if is_all_time:
-                    # All-time growth curve from publication date to today
-                    active_start = max(start_date, pub_date)
-                    span_days = max(1, (end_date - active_start).days + 1)
-                    weights = [1.0 / math.sqrt(i) for i in range(1, span_days + 1)]
-                    total_w = sum(weights)
-                    raw_gains = [int(curr_v * (w / total_w)) for w in weights]
-                    rem = curr_v - sum(raw_gains)
-                    for i in range(rem):
-                        raw_gains[i % span_days] += 1
+                # 1. Collect real snapshot data grouped by local EAT date
+                snaps = sorted(list(v.snapshots.all()), key=lambda s: s.recorded_at)
+                snap_daily_gains = {}
+                snap_daily_latest_views = {}
 
-                    running_cum = 0
-                    for idx, g in enumerate(raw_gains):
-                        d_i = active_start + timedelta(days=idx)
-                        running_cum += g
-                        if d_i in v_gains:
-                            v_gains[d_i] = g
-                            v_cum[d_i] = running_cum
+                for s in snaps:
+                    s_date = timezone.localtime(s.recorded_at).date()
+                    if s_date not in snap_daily_gains:
+                        snap_daily_gains[s_date] = 0
+                    snap_daily_gains[s_date] += max(0, s.views_change)
+                    snap_daily_latest_views[s_date] = s.views
+
+                # Check if we have multi-day empirical snapshot data within the range
+                in_range_snap_dates = [d for d in date_list if d in snap_daily_latest_views]
+                has_empirical_snapshots = len(in_range_snap_dates) >= 2 or (
+                    len(in_range_snap_dates) == 1 and in_range_snap_dates[0] != end_date
+                )
+
+                if has_empirical_snapshots:
+                    # We have real checkpoints from the database!
+                    # Fill known snapshot points first
+                    for d in in_range_snap_dates:
+                        v_cum[d] = snap_daily_latest_views[d]
+                        v_gains[d] = snap_daily_gains.get(d, 0)
+
+                    # Ensure end_date is anchored to current_views
+                    v_cum[end_date] = curr_v
+                    if end_date in snap_daily_gains and snap_daily_gains[end_date] > 0:
+                        v_gains[end_date] = snap_daily_gains[end_date]
+                    elif v.views_today > 0:
+                        v_gains[end_date] = v.views_today
+
+                    # Interpolate / extrapolate remaining dates realistically
+                    # Before publication date: 0
+                    for d in date_list:
+                        if d < pub_date:
+                            v_cum[d] = 0
+                            v_gains[d] = 0
+
+                    # Forward fill and smooth between checkpoints
+                    sorted_known_dates = sorted(set([d for d in date_list if d >= pub_date and v_cum[d] > 0] + [end_date]))
+                    if sorted_known_dates:
+                        # Before first known date (between pub_date and first known date)
+                        first_k = sorted_known_dates[0]
+                        first_v = v_cum[first_k]
+                        pre_days = [d for d in date_list if pub_date <= d < first_k]
+                        if pre_days and first_v > 0:
+                            w_list = [1.0 / math.sqrt(idx + 1) for idx in range(len(pre_days))]
+                            sum_w = sum(w_list) or 1.0
+                            run_v = 0
+                            for idx, d in enumerate(pre_days):
+                                g = int(first_v * (w_list[idx] / sum_w))
+                                run_v += g
+                                v_gains[d] = g
+                                v_cum[d] = min(first_v, run_v)
+
+                        # Between consecutive known dates
+                        for i in range(len(sorted_known_dates) - 1):
+                            d_a = sorted_known_dates[i]
+                            d_b = sorted_known_dates[i + 1]
+                            val_a = v_cum[d_a]
+                            val_b = max(val_a, v_cum[d_b])
+                            span_days = [d for d in date_list if d_a < d < d_b]
+                            if span_days:
+                                diff = val_b - val_a
+                                per_day = diff / (len(span_days) + 1)
+                                for idx, d in enumerate(span_days):
+                                    cur_cum = int(val_a + (idx + 1) * per_day)
+                                    v_cum[d] = min(val_b, cur_cum)
+                                    v_gains[d] = max(0, int(per_day))
+
+                    # Final pass to compute exact gains = delta of cum
+                    for idx in range(1, len(date_list)):
+                        d_prev = date_list[idx - 1]
+                        d_cur = date_list[idx]
+                        if d_cur in snap_daily_gains and snap_daily_gains[d_cur] > 0:
+                            v_gains[d_cur] = snap_daily_gains[d_cur]
+                        else:
+                            v_gains[d_cur] = max(0, v_cum[d_cur] - v_cum[d_prev])
+
                 else:
-                    # Fixed window (e.g. 7D, 30D, 90D, 1Y)
-                    # Determine window views gained
-                    if num_days <= 8:
-                        window_gain = v.views_this_week or int(curr_v * min(1.0, 7.0 / max(7, (end_date - pub_date).days + 1)))
-                    elif num_days <= 32:
-                        window_gain = v.views_this_month or int(curr_v * min(1.0, 30.0 / max(30, (end_date - pub_date).days + 1)))
-                    elif num_days <= 95:
-                        window_gain = min(curr_v, int((v.views_this_month or int(curr_v * 0.1)) * 2.8))
-                    else:
-                        window_gain = min(curr_v, int((v.views_this_month or int(curr_v * 0.1)) * 9.5))
-
-                    if pub_date >= start_date:
-                        # Video released during this window
-                        active_days = max(1, (end_date - pub_date).days + 1)
-                        weights = [1.0 / math.sqrt(i) for i in range(1, active_days + 1)]
+                    # No multi-day historical snapshots recorded yet:
+                    # Use publication-date bounded realistic growth model
+                    if is_all_time:
+                        active_start = max(start_date, pub_date)
+                        span_days = max(1, (end_date - active_start).days + 1)
+                        weights = [1.0 / math.sqrt(i) for i in range(1, span_days + 1)]
                         total_w = sum(weights)
                         raw_gains = [int(curr_v * (w / total_w)) for w in weights]
                         rem = curr_v - sum(raw_gains)
                         for i in range(rem):
-                            raw_gains[i % active_days] += 1
+                            raw_gains[i % span_days] += 1
 
                         running_cum = 0
                         for idx, g in enumerate(raw_gains):
-                            d_i = pub_date + timedelta(days=idx)
+                            d_i = active_start + timedelta(days=idx)
                             running_cum += g
                             if d_i in v_gains:
                                 v_gains[d_i] = g
                                 v_cum[d_i] = running_cum
                     else:
-                        # Video was already released before start_date
-                        base_views = max(0, curr_v - window_gain)
-                        # Distribute window_gain smoothly across the window
-                        weights = [1.0 + 0.05 * math.sin(i * 0.5) for i in range(num_days)]
-                        total_w = sum(weights)
-                        raw_gains = [int(window_gain * (w / total_w)) for w in weights]
-                        rem = window_gain - sum(raw_gains)
-                        for i in range(rem):
-                            raw_gains[i % num_days] += 1
+                        # Fixed window (7D, 30D, 90D, 1Y)
+                        if num_days <= 8:
+                            window_gain = v.views_this_week or int(curr_v * min(1.0, 7.0 / max(7, (end_date - pub_date).days + 1)))
+                        elif num_days <= 32:
+                            window_gain = v.views_this_month or int(curr_v * min(1.0, 30.0 / max(30, (end_date - pub_date).days + 1)))
+                        elif num_days <= 95:
+                            window_gain = min(curr_v, int((v.views_this_month or int(curr_v * 0.1)) * 2.8))
+                        else:
+                            window_gain = min(curr_v, int((v.views_this_month or int(curr_v * 0.1)) * 9.5))
 
-                        running_cum = base_views
-                        for idx, d_i in enumerate(date_list):
-                            running_cum += raw_gains[idx]
-                            v_gains[d_i] = raw_gains[idx]
-                            v_cum[d_i] = min(curr_v, running_cum)
-                        v_cum[end_date] = curr_v
+                        if pub_date >= start_date:
+                            # Video released during this window
+                            active_days = max(1, (end_date - pub_date).days + 1)
+                            weights = [1.0 / math.sqrt(i) for i in range(1, active_days + 1)]
+                            total_w = sum(weights)
+                            raw_gains = [int(curr_v * (w / total_w)) for w in weights]
+                            rem = curr_v - sum(raw_gains)
+                            for i in range(rem):
+                                raw_gains[i % active_days] += 1
+
+                            running_cum = 0
+                            for idx, g in enumerate(raw_gains):
+                                d_i = pub_date + timedelta(days=idx)
+                                running_cum += g
+                                if d_i in v_gains:
+                                    v_gains[d_i] = g
+                                    v_cum[d_i] = running_cum
+                        else:
+                            # Video was already released before start_date
+                            base_views = max(0, curr_v - window_gain)
+                            weights = [1.0 for _ in range(num_days)]
+                            total_w = sum(weights)
+                            raw_gains = [int(window_gain * (w / total_w)) for w in weights]
+                            rem = window_gain - sum(raw_gains)
+                            for i in range(rem):
+                                raw_gains[i % num_days] += 1
+
+                            running_cum = base_views
+                            for idx, d_i in enumerate(date_list):
+                                running_cum += raw_gains[idx]
+                                v_gains[d_i] = raw_gains[idx]
+                                v_cum[d_i] = min(curr_v, running_cum)
+                            v_cum[end_date] = curr_v
+
+            # Guarantee monotonicity and anchor end_date
+            for idx in range(len(date_list)):
+                d = date_list[idx]
+                if d < pub_date:
+                    v_cum[d] = 0
+                    v_gains[d] = 0
+                elif idx > 0:
+                    d_prev = date_list[idx - 1]
+                    if v_cum[d] < v_cum[d_prev]:
+                        v_cum[d] = v_cum[d_prev]
+
+            v_cum[end_date] = curr_v
 
             video_trajectories.append({
                 'pub_date': pub_date,
@@ -324,7 +424,11 @@ class AnalyticsService:
         active_days = sum(1 for c in cumulative_views_series if c > 0)
         avg_daily_views = round(total_views_gained / max(1, len(date_list)), 1) if len(date_list) > 0 else 0.0
         
-        first_release = min((v.published_at for v in videos), default=None)
+        first_release = None
+        if videos:
+            valid_pubs = [timezone.localtime(v.published_at) for v in videos if v.published_at]
+            if valid_pubs:
+                first_release = min(valid_pubs)
         first_release_str = first_release.strftime('%b %d, %Y') if first_release else 'N/A'
         latest_cumulative = cumulative_views_series[-1] if cumulative_views_series else sum(v.current_views for v in videos)
 
@@ -386,6 +490,7 @@ class AnalyticsService:
         """
         artists = list(Artist.objects.filter(id__in=artist_ids).select_related('channel'))
         now = timezone.now()
+        local_now = timezone.localtime(now)
         thirty_days_ago = now - timedelta(days=30)
 
         comparison_data = []
@@ -418,11 +523,11 @@ class AnalyticsService:
                 'total_comments': v_stats['total_comments'] or 0,
             })
 
-        # Build multi-line comparison chart data for the selected artists
+        # Build multi-line comparison chart data for the selected artists in EAT
         days = 30
         labels = []
-        cur = (now - timedelta(days=days)).date()
-        while cur <= now.date():
+        cur = (local_now - timedelta(days=days)).date()
+        while cur <= local_now.date():
             labels.append(cur.strftime('%b %d'))
             cur += timedelta(days=1)
 
@@ -452,6 +557,7 @@ class AnalyticsService:
         """
         videos = list(Video.objects.filter(id__in=video_ids, is_active=True).select_related('artist', 'channel'))
         now = timezone.now()
+        local_now = timezone.localtime(now)
         thirty_days_ago = now - timedelta(days=30)
 
         comparison_data = []
@@ -470,11 +576,11 @@ class AnalyticsService:
                 'comment_rate': v.comment_rate,
             })
 
-        # Chart dataset
+        # Chart dataset in EAT
         days = 30
         labels = []
-        cur = (now - timedelta(days=days)).date()
-        while cur <= now.date():
+        cur = (local_now - timedelta(days=days)).date()
+        while cur <= local_now.date():
             labels.append(cur.strftime('%b %d'))
             cur += timedelta(days=1)
 
@@ -820,16 +926,63 @@ class AnalyticsService:
 
         artist_matrices.sort(key=lambda x: x['monthly_revenue'], reverse=True)
 
-        # 4. Monthly Performance Timeline (Historical Months up to Current Month)
+        # 4. Monthly Performance Timeline (Starting from Account / Catalog Creation Month up to Current Month)
         now = timezone.now()
-        cur_year = now.year
-        cur_month = now.month
-        current_month_key = now.strftime('%Y-%m')
+        local_now = timezone.localtime(now)
+        cur_year = local_now.year
+        cur_month = local_now.month
+        current_month_key = local_now.strftime('%Y-%m')
 
         like_ratio = (total_catalog_likes / max(1, total_catalog_views)) if total_catalog_views > 0 else 0.05
         comment_ratio = (total_catalog_comments / max(1, total_catalog_views)) if total_catalog_views > 0 else 0.003
         top_platform_artist = artist_matrices[0]['artist'].stage_name if artist_matrices else 'N/A'
         top_platform_song = processed_videos[0]['title'] if processed_videos else 'N/A'
+        effective_avg_rpm = round((total_platform_monthly_rev / (total_platform_30d_views / 1000.0)), 2) if total_platform_30d_views > 0 else base_rpm
+
+        # Determine start date based on account / channel / artist creation date
+        candidate_dates = []
+        if artist_filter_id:
+            filtered_artist = next((a for a in all_artists_list if a.id == artist_filter_id), None)
+            if filtered_artist:
+                if filtered_artist.created_at:
+                    candidate_dates.append(filtered_artist.created_at)
+                if filtered_artist.has_channel and filtered_artist.channel.created_at:
+                    candidate_dates.append(filtered_artist.channel.created_at)
+            for v in videos:
+                if v.published_at:
+                    candidate_dates.append(v.published_at)
+        else:
+            for a in all_artists_list:
+                if a.created_at:
+                    candidate_dates.append(a.created_at)
+                if a.has_channel and a.channel.created_at:
+                    candidate_dates.append(a.channel.created_at)
+            for v in videos:
+                if v.published_at:
+                    candidate_dates.append(v.published_at)
+            try:
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                oldest_user = User.objects.order_by('date_joined').first()
+                if oldest_user and oldest_user.date_joined:
+                    candidate_dates.append(oldest_user.date_joined)
+            except Exception:
+                pass
+
+        if candidate_dates:
+            earliest_date = timezone.localtime(min(candidate_dates))
+            start_year = earliest_date.year
+            start_month = earliest_date.month
+        else:
+            start_year = cur_year
+            start_month = cur_month
+
+        # Clamp start month to not exceed current month
+        if (start_year * 12 + start_month) > (cur_year * 12 + cur_month):
+            start_year = cur_year
+            start_month = cur_month
+
+        total_historical_months = (cur_year * 12 + cur_month) - (start_year * 12 + start_month)
 
         monthly_summaries = []
 
@@ -842,8 +995,8 @@ class AnalyticsService:
 
         from datetime import date
 
-        # Look back over the past 5 historical months + current month (up to 6 active months)
-        for offset in range(-5, 0):
+        # Iterate over all historical months from account creation up to previous month
+        for offset in range(-total_historical_months, 0):
             y, m = get_year_month(offset)
             m_date = date(y, m, 1)
             m_key = m_date.strftime('%Y-%m')
@@ -862,28 +1015,41 @@ class AnalyticsService:
             snap_views = sum(s.views_change for s in snaps)
             snap_likes = sum(s.likes_change for s in snaps)
             snap_comments = sum(s.comments_change for s in snaps)
+            snap_rev = sum((s.views_change / 1000.0) * get_video_format_and_rpm(s.video)[1] for s in snaps)
 
             # Check new videos released in this month
             released_in_month = [v for v in videos if v.published_at and v.published_at.year == y and v.published_at.month == m]
             rel_views = sum(v.current_views for v in released_in_month)
             rel_likes = sum(v.current_likes for v in released_in_month)
             rel_comments = sum(v.current_comments for v in released_in_month)
+            rel_rev = sum((v.current_views / 1000.0) * get_video_format_and_rpm(v)[1] for v in released_in_month)
 
-            m_views = max(snap_views, rel_views)
-            if m_views == 0 and offset >= -2 and total_platform_30d_views > 0:
-                # Approximate baseline velocity for recently active catalog months
-                m_views = int(total_platform_30d_views * (0.85 ** abs(offset)))
+            if snap_views >= rel_views and snap_views > 0:
+                m_views = snap_views
+                m_rev = snap_rev
+                m_likes = snap_likes
+                m_comments = snap_comments
+            elif rel_views > 0:
+                m_views = rel_views
+                m_rev = rel_rev
+                m_likes = rel_likes
+                m_comments = rel_comments
+            else:
+                m_views = 0
+                m_rev = 0.0
+                m_likes = 0
+                m_comments = 0
 
-            m_likes = max(snap_likes, rel_likes, int(m_views * like_ratio))
-            m_comments = max(snap_comments, rel_comments, int(m_views * comment_ratio))
+            m_likes = max(m_likes, int(m_views * like_ratio))
+            m_comments = max(m_comments, int(m_views * comment_ratio))
             m_interactions = m_likes + m_comments
             m_int_rate = round((m_interactions / max(1, m_views)) * 100, 2)
-            m_rev = round((m_views / 1000.0) * base_rpm, 2)
+            m_rev = round(m_rev, 2)
+            m_effective_rpm = round((m_rev / (m_views / 1000.0)), 2) if m_views > 0 else base_rpm
 
             top_artist_name = released_in_month[0].artist.stage_name if released_in_month and released_in_month[0].artist else top_platform_artist
             top_song_name = released_in_month[0].title if released_in_month else top_platform_song
 
-            # Include months with activity or recent months
             monthly_summaries.append({
                 'month_key': m_key,
                 'month_label': m_label,
@@ -896,25 +1062,21 @@ class AnalyticsService:
                 'comments': m_comments,
                 'interactions': m_interactions,
                 'interaction_rate': m_int_rate,
-                'rpm': base_rpm,
+                'rpm': m_effective_rpm,
                 'revenue': m_rev,
-                'formula_breakdown': f"({m_views:,} views / 1,000) × ${base_rpm:.2f} RPM = ${m_rev:,.2f}",
+                'formula_breakdown': f"({m_views:,} views / 1,000) × ${m_effective_rpm:.2f} Effective RPM = ${m_rev:,.2f}",
                 'top_artist': top_artist_name,
                 'top_video': top_song_name,
                 'mom_growth': 0.0,
             })
 
-        # Filter out leading zero months before activity started
-        while len(monthly_summaries) > 2 and monthly_summaries[0]['views'] == 0:
-            monthly_summaries.pop(0)
-
-        # Current Month (September 2026 to Date)
+        # Current Month (To Date)
         current_m_views = total_platform_30d_views
         current_m_likes = int(current_m_views * like_ratio) if current_m_views > 0 else 0
         current_m_comments = int(current_m_views * comment_ratio) if current_m_views > 0 else 0
         current_m_interactions = current_m_likes + current_m_comments
         current_m_int_rate = round((current_m_interactions / max(1, current_m_views)) * 100, 2)
-        current_m_rev = total_platform_monthly_rev
+        current_m_rev = round(total_platform_monthly_rev, 2)
 
         monthly_summaries.append({
             'month_key': current_month_key,
@@ -928,9 +1090,9 @@ class AnalyticsService:
             'comments': current_m_comments,
             'interactions': current_m_interactions,
             'interaction_rate': current_m_int_rate,
-            'rpm': base_rpm,
+            'rpm': effective_avg_rpm,
             'revenue': current_m_rev,
-            'formula_breakdown': f"({current_m_views:,} views / 1,000) × ${base_rpm:.2f} RPM = ${current_m_rev:,.2f}",
+            'formula_breakdown': f"({current_m_views:,} views / 1,000) × ${effective_avg_rpm:.2f} Effective RPM = ${current_m_rev:,.2f}",
             'top_artist': top_platform_artist,
             'top_video': top_platform_song,
             'mom_growth': 0.0,

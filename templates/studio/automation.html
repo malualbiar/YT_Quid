@@ -376,6 +376,62 @@
             <div class="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-500"></div>
           </label>
         </div>
+
+        <!-- Demucs Toggle -->
+        <div class="flex items-center justify-between p-3 rounded-xl bg-zinc-950 border border-zinc-800">
+          <div class="flex items-center gap-2">
+            <i data-lucide="scissors" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <div>
+              <span class="text-xs font-semibold text-white">Demucs Vocal Isolation</span>
+              <p class="text-[10px] text-zinc-500 mt-0.5">Strips instruments before transcribing — slower but more accurate on dense mixes</p>
+            </div>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer shrink-0">
+            <input type="checkbox" name="use_demucs" value="1" class="sr-only peer">
+            <div class="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+          </label>
+        </div>
+      </div>
+
+      <!-- ── Custom Thumbnail Generator ── -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between border-b border-zinc-800 pb-1.5">
+          <div class="flex items-center gap-2">
+            <i data-lucide="image" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <p class="text-[11px] font-semibold text-zinc-300 uppercase tracking-wider">Custom YouTube Thumbnail</p>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" name="generate_thumbnail" value="1" checked class="sr-only peer">
+            <div class="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+          </label>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="text-[11px] font-semibold text-zinc-400 mb-1 block">Thumbnail Style</label>
+            <select name="thumbnail_style" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500">
+              <option value="FROSTED_SCRIM" selected>Frosted Dark Scrim (Masks Old Text) [Default]</option>
+              <option value="AMBIENT_CARD">Ambient Blurred Canvas + Framed Artwork</option>
+              <option value="THEMED_BACKDROP">Themed Aesthetic Music Backdrop</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-[11px] font-semibold text-zinc-400 mb-1 block">Corner Badge Text</label>
+            <input type="text" name="thumbnail_badge" value="OFFICIAL LYRIC VIDEO" placeholder="e.g. OFFICIAL LYRIC VIDEO"
+                   class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="text-[11px] font-semibold text-zinc-400 mb-1 block">Themed Palette (for Themed Backdrop style)</label>
+          <select name="thumbnail_theme" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500">
+            <option value="DARK_STUDIO" selected>Dark Studio &amp; Moody Cyan</option>
+            <option value="CYBERPUNK_NEON">Cyberpunk Magenta &amp; Neon</option>
+            <option value="LOFI_SUNSET">Lo-Fi Sunset Amber &amp; Gold</option>
+            <option value="ROYAL_GOLD">Royal Gold &amp; Obsidian</option>
+            <option value="DEEP_COSMIC">Deep Cosmic Indigo &amp; Violet</option>
+          </select>
+        </div>
       </div>
 
       <!-- Publish settings -->
@@ -664,16 +720,20 @@ function attachPreview(card) {
     const style       = styleSel       ? styleSel.value       : 'KARAOKE_WIPE';
     const highlight   = highlightInp   ? highlightInp.value   : '#00E5FF';
     const textColor   = textColorInp   ? textColorInp.value   : '#FFFFFF';
-    const fontSize    = fontSizeInp    ? parseInt(fontSizeInp.value) || 48 : 48;
+    const fontSizeRaw = fontSizeInp    ? parseInt(fontSizeInp.value) || 48 : 48;
     const position    = positionSel    ? positionSel.value    : 'CENTER';
+    const fontWeightEl = card.querySelector('[name$="[font_weight]"]');
+    const fontWeight  = fontWeightEl ? fontWeightEl.value : 'bold';
 
-    // Scale font size to canvas (video is 1920×1080, canvas is smaller)
-    const scale       = W / 1920;
-    const scaledSize  = Math.max(10, Math.round(fontSize * scale * 2.2));
+    // ── Accurate font size scaling ─────────────────────────────────────────
+    // The renderer does: actual_font_size = int((font_size / 1080) * video_height)
+    // For 16:9 video_height=1080 → actual_font_size ≈ font_size
+    // For 9:16 video_height=1920 → actual_font_size ≈ font_size * (1920/1080)
+    // On canvas we scale proportionally to canvas H relative to 1080
+    const scaledSize = Math.max(8, Math.round(fontSizeRaw * (H / 1080)));
 
     // ── 1. Background ──────────────────────────────────────────────────────
     if (bgImage) {
-      // Cover-fit the image
       const iW = bgImage.naturalWidth  || W;
       const iH = bgImage.naturalHeight || H;
       const iAR = iW / iH;
@@ -683,10 +743,8 @@ function attachPreview(card) {
       else           { sh = iW / cAR; sy = (iH - sh) / 2; }
       ctx.drawImage(bgImage, sx, sy, sw, sh, 0, 0, W, H);
     } else if (vidEl && vidEl.src && vidEl.readyState >= 2) {
-      // Draw current video frame
       ctx.drawImage(vidEl, 0, 0, W, H);
     } else {
-      // Dark gradient background
       const grad = ctx.createLinearGradient(0, 0, W, H);
       grad.addColorStop(0, '#0f0f13');
       grad.addColorStop(1, '#1a1a24');
@@ -694,78 +752,162 @@ function attachPreview(card) {
       ctx.fillRect(0, 0, W, H);
     }
 
-    // ── 2. Dark vignette overlay ───────────────────────────────────────────
-    const vignette = ctx.createRadialGradient(W/2, H/2, H*0.1, W/2, H/2, H*0.85);
-    vignette.addColorStop(0, 'rgba(0,0,0,0)');
-    vignette.addColorStop(1, 'rgba(0,0,0,0.72)');
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, W, H);
+    // ── 2. Style-specific background overlays ─────────────────────────────
+    if (style === 'RETRO_VHS') {
+      // VHS scanlines
+      ctx.fillStyle = 'rgba(0,0,0,0.22)';
+      for (let y = 0; y < H; y += 4) { ctx.fillRect(0, y, W, 2); }
+      // Slight color bleed
+      ctx.fillStyle = 'rgba(255,80,80,0.06)';
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      // Standard dark vignette
+      const vignette = ctx.createRadialGradient(W/2, H/2, H*0.1, W/2, H/2, H*0.85);
+      vignette.addColorStop(0, 'rgba(0,0,0,0)');
+      vignette.addColorStop(1, 'rgba(0,0,0,0.72)');
+      ctx.fillStyle = vignette;
+      ctx.fillRect(0, 0, W, H);
+    }
 
     // ── 3. Lyric text ──────────────────────────────────────────────────────
     const lines = getPreviewLines(style);
 
-    // Y anchor based on position
+    // Y anchor — matches renderer's margin logic
     let yAnchor;
-    if (position === 'TOP')    yAnchor = H * 0.22;
-    else if (position === 'BOTTOM') yAnchor = H * 0.78;
-    else                             yAnchor = H * 0.50;
+    if (position === 'TOP')         yAnchor = H * 0.18;
+    else if (position === 'BOTTOM') yAnchor = H * 0.80;
+    else                            yAnchor = H * 0.50;
 
-    const lineGap = scaledSize * 1.45;
+    const lineGap = scaledSize * 1.5;
     const totalH  = lines.length * lineGap;
     let startY    = yAnchor - totalH / 2 + scaledSize * 0.5;
 
     ctx.textAlign    = 'center';
     ctx.textBaseline = 'middle';
 
+    const cssWeight = (fontWeight === 'bold' || fontWeight === '700' || fontWeight === '900') ? 'bold' : 'normal';
+    const baseFont  = `${cssWeight} ${scaledSize}px "${font}", Arial, sans-serif`;
+
     lines.forEach((line, li) => {
       const y = startY + li * lineGap;
 
-      // Shadow / outline
-      ctx.shadowColor   = 'rgba(0,0,0,0.9)';
-      ctx.shadowBlur    = scaledSize * 0.3;
-      ctx.shadowOffsetX = 2;
-      ctx.shadowOffsetY = 2;
+      // Reset shadow
+      ctx.shadowColor   = 'transparent';
+      ctx.shadowBlur    = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
 
-      // For karaoke: show first line half-highlighted, second in text color
-      let color = textColor;
-      if (style === 'KARAOKE_WIPE' && li === 0) {
-        // Split: first half highlight, second half text color
-        ctx.font = `bold ${scaledSize}px "${font}", Arial`;
-        const half = Math.floor(line.length / 2);
-        const part1 = line.slice(0, half);
-        const part2 = line.slice(half);
-        const w1 = ctx.measureText(part1).width;
-        const w2 = ctx.measureText(part2).width;
-        const totalW = w1 + w2;
-        const startX = W / 2 - totalW / 2;
-        ctx.shadowColor = 'rgba(0,0,0,0.9)';
-        ctx.fillStyle = highlight;
-        ctx.fillText(part1, startX + w1 / 2, y);
-        ctx.fillStyle = textColor;
-        ctx.fillText(part2, startX + w1 + w2 / 2, y);
-        return;
-      }
+      // ── Per-style rendering ────────────────────────────────────────────
+      if (style === 'KARAOKE_WIPE') {
+        // First line: left half highlighted, right half text color (simulates mid-wipe)
+        ctx.font = baseFont;
+        ctx.shadowColor   = 'rgba(0,0,0,0.85)';
+        ctx.shadowBlur    = scaledSize * 0.35;
+        ctx.shadowOffsetX = Math.round(scaledSize * 0.04);
+        ctx.shadowOffsetY = Math.round(scaledSize * 0.04);
+        if (li === 0) {
+          const half  = Math.floor(line.length / 2);
+          const part1 = line.slice(0, half);
+          const part2 = line.slice(half);
+          const w1 = ctx.measureText(part1).width;
+          const w2 = ctx.measureText(part2).width;
+          const startX = W / 2 - (w1 + w2) / 2;
+          ctx.fillStyle = highlight;
+          ctx.fillText(part1, startX + w1 / 2, y);
+          ctx.fillStyle = textColor;
+          ctx.fillText(part2, startX + w1 + w2 / 2, y);
+        } else {
+          ctx.fillStyle = textColor;
+          ctx.globalAlpha = 0.5;
+          ctx.fillText(line, W / 2, y);
+          ctx.globalAlpha = 1;
+        }
 
-      // Neon glow styles
-      if (['CYBER_NEON','NEON_GLOW','WAVE_PULSE'].includes(style)) {
+      } else if (['NEON_GLOW', 'CYBER_NEON', 'WAVE_PULSE'].includes(style)) {
+        // Bloom layer (blurred, larger)
+        ctx.font        = baseFont;
+        ctx.fillStyle   = highlight;
         ctx.shadowColor = highlight;
-        ctx.shadowBlur  = scaledSize * 0.6;
-        color = highlight;
-      }
+        ctx.shadowBlur  = scaledSize * 0.9;
+        ctx.fillText(line, W / 2, y);
+        // Sharp top layer
+        ctx.shadowBlur  = scaledSize * 0.3;
+        ctx.fillText(line, W / 2, y);
 
-      ctx.font      = `bold ${scaledSize}px "${font}", Arial`;
-      ctx.fillStyle = color;
-      ctx.fillText(line, W / 2, y);
-      ctx.shadowColor = 'transparent';
+      } else if (style === 'RETRO_VHS') {
+        // Color-shifted text (slight RGB misalignment)
+        ctx.font = baseFont;
+        ctx.globalAlpha = 0.6;
+        ctx.fillStyle = '#FF4444';
+        ctx.fillText(line, W / 2 - 2, y);
+        ctx.fillStyle = '#44FFFF';
+        ctx.fillText(line, W / 2 + 2, y);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#EEEECC';
+        ctx.shadowColor = 'rgba(0,0,0,0.6)';
+        ctx.shadowBlur  = 4;
+        ctx.fillText(line, W / 2, y);
+
+      } else if (style === 'HANDWRITTEN_INK') {
+        ctx.font        = `italic ${scaledSize}px "${font}", cursive`;
+        ctx.fillStyle   = textColor;
+        ctx.shadowColor = 'rgba(0,0,0,0.7)';
+        ctx.shadowBlur  = scaledSize * 0.2;
+        ctx.lineWidth   = scaledSize * 0.04;
+        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+        ctx.strokeText(line, W / 2, y);
+        ctx.fillText(line, W / 2, y);
+
+      } else if (style === 'CINEMATIC') {
+        // Thin font, wide letter spacing simulation via character spacing
+        ctx.font        = `300 ${scaledSize}px "${font}", Arial`;
+        ctx.fillStyle   = textColor;
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur  = scaledSize * 0.2;
+        // Simulate letter-spacing by drawing char by char
+        const letters   = line.split('');
+        const spacing   = scaledSize * 0.18;
+        const totalW    = ctx.measureText(line).width + spacing * (letters.length - 1);
+        let cx          = W / 2 - totalW / 2;
+        letters.forEach(ch => {
+          const cw = ctx.measureText(ch).width;
+          ctx.fillText(ch, cx + cw / 2, y);
+          cx += cw + spacing;
+        });
+
+      } else if (style === 'VINTAGE_COUNTRY') {
+        ctx.font        = `bold ${scaledSize}px "${font}", serif`;
+        ctx.shadowColor = 'rgba(80,40,0,0.8)';
+        ctx.shadowBlur  = scaledSize * 0.4;
+        // Gold/sepia text color
+        ctx.fillStyle   = '#F5C842';
+        ctx.fillText(line, W / 2, y);
+        ctx.strokeStyle = '#8B6914';
+        ctx.lineWidth   = scaledSize * 0.05;
+        ctx.strokeText(line, W / 2, y);
+
+      } else {
+        // Default: solid text with drop shadow (PLAYFUL_POP, BUBBLE_BOUNCE, etc.)
+        ctx.font        = baseFont;
+        ctx.fillStyle   = (li === 0) ? highlight : textColor;
+        ctx.shadowColor = 'rgba(0,0,0,0.85)';
+        ctx.shadowBlur  = scaledSize * 0.35;
+        ctx.shadowOffsetX = Math.round(scaledSize * 0.04);
+        ctx.shadowOffsetY = Math.round(scaledSize * 0.04);
+        ctx.fillText(line, W / 2, y);
+      }
     });
 
-    // ── 4. Animation style label (bottom-right watermark) ─────────────────
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur  = 0;
-    ctx.font        = `${Math.max(9, Math.round(W * 0.022))}px Arial`;
-    ctx.fillStyle   = 'rgba(255,255,255,0.25)';
-    ctx.textAlign   = 'right';
-    ctx.textBaseline = 'bottom';
+    // ── 4. Style label watermark (bottom-right) ────────────────────────────
+    ctx.globalAlpha   = 1;
+    ctx.shadowColor   = 'transparent';
+    ctx.shadowBlur    = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.font          = `${Math.max(9, Math.round(W * 0.022))}px Arial`;
+    ctx.fillStyle     = 'rgba(255,255,255,0.22)';
+    ctx.textAlign     = 'right';
+    ctx.textBaseline  = 'bottom';
     ctx.fillText(style.replace(/_/g,' '), W - 8, H - 6);
   }
 
@@ -806,7 +948,8 @@ function attachPreview(card) {
   }
 
   // ── Visual control change listeners ──────────────────────────────────────
-  [fontSel, styleSel, highlightInp, textColorInp, fontSizeInp, positionSel].forEach(el => {
+  const fontWeightSelPreview = card.querySelector('[name$="[font_weight]"]');
+  [fontSel, styleSel, highlightInp, textColorInp, fontSizeInp, positionSel, fontWeightSelPreview].forEach(el => {
     if (el) el.addEventListener('change', () => {
       if (el === fontSel) {
         loadGoogleFont(el.value).then(schedDraw);

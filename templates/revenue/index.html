@@ -184,14 +184,14 @@
         <!-- Card 3: Today's Run Rate -->
         <div class="bg-dark-850 border border-zinc-800 rounded-xl p-4.5 shadow-sm">
             <div class="flex items-center justify-between text-zinc-400 text-xs mb-1.5">
-                <span>Today's Estimated Revenue</span>
+                <span>Today's Estimated Revenue (EAT)</span>
                 <i data-lucide="clock-3" class="w-4 h-4 text-teal-400"></i>
             </div>
             <div class="text-xl font-bold font-mono text-zinc-100">
                 ${{ kpis.total_daily_revenue|floatformat:2|intcomma }}
             </div>
             <div class="text-[11px] text-zinc-400 mt-1">
-                <span>From {{ kpis.total_today_views|intcomma }} views today</span>
+                <span>From {{ kpis.total_today_views|intcomma }} views today (EAT)</span>
             </div>
         </div>
 
@@ -257,7 +257,7 @@
                             {% if ms.is_current %}
                             <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-sans font-semibold">To Date</span>
                             {% else %}
-                            <span class="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-sans">Completed</span>
+                            <span class="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 font-sans">Historical</span>
                             {% endif %}
                         </td>
                         <td class="py-3 px-3 text-right text-zinc-100 font-semibold">{{ ms.views|intcomma }}</td>

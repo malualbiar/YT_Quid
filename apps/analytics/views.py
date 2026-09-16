@@ -44,6 +44,7 @@ def dashboard_view(request):
 
 @login_required
 def artist_comparison_view(request):
+    AnalyticsService.update_video_growth_metrics()
     all_artists = Artist.objects.filter(status=Artist.Status.ACTIVE).order_by('stage_name')
     
     selected_ids = request.GET.getlist('artists')
@@ -65,6 +66,7 @@ def artist_comparison_view(request):
 
 @login_required
 def video_comparison_view(request):
+    AnalyticsService.update_video_growth_metrics()
     all_videos = Video.objects.filter(is_active=True).select_related('artist').order_by('-current_views')[:50]
     
     selected_ids = request.GET.getlist('videos')

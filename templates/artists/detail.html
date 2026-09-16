@@ -151,7 +151,7 @@
     <!-- Artist Catalog Videos Table -->
     <div class="glass-panel rounded-2xl border border-zinc-800 overflow-hidden">
         <div class="p-5 border-b border-zinc-800 flex items-center justify-between">
-            <h3 class="text-sm font-bold text-white">Catalog Videos & Songs ({{ videos.count }})</h3>
+            <h3 class="text-sm font-bold text-white">Catalog Videos & Songs ({{ total_videos }})</h3>
             <a href="{% url 'video_list' %}?artist={{ artist.id }}" class="text-xs font-semibold text-emerald-400 hover:text-emerald-300">View In Catalog →</a>
         </div>
 

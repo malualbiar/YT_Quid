@@ -116,7 +116,7 @@ class AutomationRunnerService:
         cls._set_song_status(pipeline, idx, 'DOWNLOADING', 0)
         cls._song_log(pipeline, idx, f'⬇ Downloading audio from: {url}')
 
-        audio_path, title, artist = cls._download_audio(pipeline, idx, url, cfg)
+        audio_path, title, artist, yt_thumb_path = cls._download_audio(pipeline, idx, url, cfg)
 
         cls._song_log(pipeline, idx, f'✓ Downloaded: {title or url}')
         cls._set_song_field(pipeline, idx, 'title', title)
@@ -131,11 +131,38 @@ class AutomationRunnerService:
         cls._set_song_status(pipeline, idx, 'RENDERING', 30)
         cls._song_log(pipeline, idx, f'🎬 Rendering lyric video for: {title}')
 
-        video_path = cls._render_lyrics(pipeline, idx, audio_path, title, artist, cfg)
+        video_path, lyric_project_id = cls._render_lyrics(pipeline, idx, audio_path, title, artist, yt_thumb_path, cfg)
 
         cls._song_log(pipeline, idx, f'✓ Rendered: {os.path.basename(video_path)}')
 
-        # ── 3. PUBLISH ─────────────────────────────────────────────────
+        # ── 3. GENERATE ATTRACTIVE THUMBNAIL ───────────────────────────
+        custom_thumb_path = None
+        do_gen_thumb = cfg.get('generate_thumbnail', True)
+        if do_gen_thumb:
+            try:
+                from apps.studio.services.thumbnail_generator import ThumbnailGeneratorService
+                cls._song_log(pipeline, idx, '🎨 Generating attractive custom thumbnail...')
+                thumb_style = cfg.get('thumbnail_style', 'FROSTED_SCRIM')
+                badge_text = cfg.get('thumbnail_badge', 'OFFICIAL LYRIC VIDEO')
+                theme_palette = cfg.get('thumbnail_theme', 'DARK_STUDIO')
+                bg_source = cfg.get('background_image_path') or yt_thumb_path
+
+                custom_thumb_path = ThumbnailGeneratorService.generate_thumbnail(
+                    title=title,
+                    artist=artist,
+                    background_image_path=bg_source,
+                    style=thumb_style,
+                    badge_text=badge_text,
+                    theme_palette=theme_palette,
+                    project_id=lyric_project_id,
+                )
+                cls._set_song_field(pipeline, idx, 'thumbnail_path', custom_thumb_path)
+                cls._song_log(pipeline, idx, f'✓ Thumbnail created ({thumb_style} style).')
+            except Exception as te:
+                logger.warning(f"Thumbnail generation notice for song {idx}: {te}")
+                cls._song_log(pipeline, idx, f'⚠ Thumbnail generation notice: {te}')
+
+        # ── 4. PUBLISH ─────────────────────────────────────────────────
         do_publish = cfg.get('do_publish', True)
         if not do_publish:
             cls._song_log(pipeline, idx, '⏭ Skipping publish (do_publish=false).')
@@ -144,7 +171,7 @@ class AutomationRunnerService:
         cls._set_song_status(pipeline, idx, 'PUBLISHING', 70)
         cls._song_log(pipeline, idx, f'🚀 Publishing to YouTube: {title}')
 
-        cls._publish_video(pipeline, idx, video_path, title, artist, cfg)
+        cls._publish_video(pipeline, idx, video_path, title, artist, custom_thumb_path, cfg)
 
     # ------------------------------------------------------------------
     # Step implementations
@@ -158,7 +185,7 @@ class AutomationRunnerService:
 
         fmt = cfg.get('audio_format', 'mp3_320')
 
-        # Fetch metadata first for title/artist
+        # Fetch metadata first for title/artist/thumbnail
         raw_title, thumbnail = '', ''
         try:
             info = dl_services.fetch_video_info(url)
@@ -180,6 +207,20 @@ class AutomationRunnerService:
         )
         cls._set_song_field(pipeline, idx, 'download_job_id', job.pk)
         cls._save_results(pipeline)
+
+        # Cache high-res thumbnail locally if available
+        downloaded_thumb = ''
+        if thumbnail:
+            try:
+                import urllib.request
+                thumb_dir = os.path.join(settings.MEDIA_ROOT, 'studio', 'automation_covers')
+                os.makedirs(thumb_dir, exist_ok=True)
+                thumb_dest = os.path.join(thumb_dir, f"yt_thumb_{job.pk}.jpg")
+                urllib.request.urlretrieve(thumbnail, thumb_dest)
+                if os.path.exists(thumb_dest) and os.path.getsize(thumb_dest) > 1000:
+                    downloaded_thumb = thumb_dest
+            except Exception as te:
+                logger.warning(f"Could not download remote thumbnail {thumbnail}: {te}")
 
         done_event = threading.Event()
         result = {}
@@ -220,10 +261,10 @@ class AutomationRunnerService:
         if not result.get('path'):
             raise RuntimeError("Download timed out after 10 minutes.")
 
-        return result['path'], title, artist
+        return result['path'], title, artist, downloaded_thumb
 
     @classmethod
-    def _render_lyrics(cls, pipeline, idx, audio_path, title, artist, cfg):
+    def _render_lyrics(cls, pipeline, idx, audio_path, title, artist, yt_thumb_path, cfg):
         from django.conf import settings
         from django.core.files import File
         from apps.studio.models import LyricVideoProject
@@ -241,31 +282,24 @@ class AutomationRunnerService:
         text_stroke_width = float(cfg.get('text_stroke_width', 2.5))
         text_shadow_depth = float(cfg.get('text_shadow_depth', 2.0))
         lyrics_text = cfg.get('lyrics_text', '')
-        bg_img_path = cfg.get('background_image_path', '')
+        bg_img_path = cfg.get('background_image_path', '') or yt_thumb_path or ''
         bg_vid_path = cfg.get('background_video_path', '')
 
         duration = LyricsEngineService.inspect_media_duration(audio_path)
 
         lyrics_data = []
-        # 1. Auto-fetch synced lyrics from LRCLIB online database first
-        if title:
-            try:
-                online = LyricsEngineService.fetch_online_synced_lyrics(title, artist)
-                if online.get('success') and online.get('lyrics_data'):
-                    lyrics_data = online['lyrics_data']
-                    cls._song_log(pipeline, idx, f'  ✓ Synced lyrics found online ({len(lyrics_data)} lines).')
-            except Exception:
-                pass
-
-        # 2. Whisper AI transcription — runs when LRCLIB found nothing and no lyrics were pasted
         use_whisper = cfg.get('use_whisper', True)
-        if not lyrics_data and not lyrics_text and use_whisper:
+        use_demucs = cfg.get('use_demucs', False)
+        whisper_model = cfg.get('whisper_model', 'base')
+        
+        # 1. Use Whisper AI if enabled
+        if use_whisper and not lyrics_text:
             try:
-                cls._song_log(pipeline, idx, '  🎙 Transcribing with Whisper AI (base model)...')
+                cls._song_log(pipeline, idx, f'  🎙 Transcribing with Whisper AI ({whisper_model} model)...')
                 whisper_result = LyricsEngineService.transcribe_and_sync_with_whisper(
                     audio_path,
-                    model_size='base',
-                    use_demucs=False,
+                    model_size=whisper_model,
+                    use_demucs=use_demucs,
                 )
                 w_bars = whisper_result.get('lyrics_data') or []
                 if w_bars:
@@ -277,6 +311,16 @@ class AutomationRunnerService:
                 cls._song_log(pipeline, idx, '  ⚠ faster-whisper not installed — skipping AI transcription.')
             except Exception as e:
                 cls._song_log(pipeline, idx, f'  ⚠ Whisper failed ({e}) — falling back to instrumental placeholder.')
+
+        # 2. Auto-fetch synced lyrics from LRCLIB online database if Whisper disabled
+        if not lyrics_data and not lyrics_text and title:
+            try:
+                online = LyricsEngineService.fetch_online_synced_lyrics(title, artist)
+                if online.get('success') and online.get('lyrics_data'):
+                    lyrics_data = online['lyrics_data']
+                    cls._song_log(pipeline, idx, f'  ✓ Synced lyrics found online ({len(lyrics_data)} lines).')
+            except Exception:
+                pass
 
         # 3. Fall back to pasted lyrics or instrumental placeholder
         if not lyrics_data:
@@ -367,10 +411,10 @@ class AutomationRunnerService:
 
         cls._set_song_field(pipeline, idx, 'progress', 70)
         cls._save_results(pipeline)
-        return out_path
+        return out_path, project.pk
 
     @classmethod
-    def _publish_video(cls, pipeline, idx, video_path, title, artist, cfg):
+    def _publish_video(cls, pipeline, idx, video_path, title, artist, custom_thumb_path, cfg):
         import time
         from apps.publishing.models import PublishingJob, YouTubeOAuthAccount
         from apps.publishing.services.uploader_service import YouTubeUploaderService
@@ -412,6 +456,7 @@ class AutomationRunnerService:
             category_id=category_id,
             privacy_status=privacy,
             video_file_path=video_path,
+            thumbnail_path=custom_thumb_path or '',
             source_type=PublishingJob.SourceType.LYRIC_VIDEO,
             source_id=lyric_project_id,
             status=PublishingJob.Status.QUEUED,

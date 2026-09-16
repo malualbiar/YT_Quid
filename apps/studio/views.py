@@ -954,6 +954,7 @@ def lyrics_render_view(request):
     font_scale_x = int(request.POST.get('font_scale_x') or 100)
     font_scale_y = int(request.POST.get('font_scale_y') or 100)
     bg_opacity = int(request.POST.get('bg_opacity') or 0)
+    time_offset = float(request.POST.get('time_offset') or 0.0)
 
     lyrics_raw_text = request.POST.get('lyrics_raw_text', '').strip()
 
@@ -1057,7 +1058,8 @@ def _execute_lyrics_render(project_id, title, artist_name, loop_video):
             title=title,
             artist=artist_name,
             loop_video=loop_video,
-            project_id=project.id
+            project_id=project.id,
+            time_offset=project.time_offset,
         )
 
         if RenderProcessTracker.is_cancelled('lyrics', project.id):
@@ -1127,6 +1129,7 @@ def lyrics_render_view(request):
     font_scale_x = int(request.POST.get('font_scale_x') or 100)
     font_scale_y = int(request.POST.get('font_scale_y') or 100)
     bg_opacity = int(request.POST.get('bg_opacity') or 0)
+    time_offset = float(request.POST.get('time_offset') or 0.0)
 
     lyrics_raw_text = request.POST.get('lyrics_raw_text', '').strip()
 
@@ -1207,6 +1210,7 @@ def lyrics_render_view(request):
         font_scale_x=font_scale_x,
         font_scale_y=font_scale_y,
         bg_opacity=bg_opacity,
+        time_offset=time_offset,
         render_status=LyricVideoProject.Status.RENDERING
     )
 
@@ -1796,6 +1800,11 @@ def automation_create_view(request):
                 'description':       _get(idx, 'description',     ''),
                 'account_id':        _get(idx, 'account_id',      ''),
                 'use_whisper':       _get(idx, 'use_whisper',      '0') in ('1', 'true', 'on'),
+                'use_demucs':        _get(idx, 'use_demucs',       '0') in ('1', 'true', 'on'),
+                'generate_thumbnail': _get(idx, 'generate_thumbnail', '1') in ('1', 'true', 'on'),
+                'thumbnail_style':   _get(idx, 'thumbnail_style', 'FROSTED_SCRIM'),
+                'thumbnail_badge':   _get(idx, 'thumbnail_badge', 'OFFICIAL LYRIC VIDEO'),
+                'thumbnail_theme':   _get(idx, 'thumbnail_theme', 'DARK_STUDIO'),
                 'do_render':         do_render,
                 'do_publish':        do_publish,
             }

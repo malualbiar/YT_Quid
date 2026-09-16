@@ -10,8 +10,9 @@
         <div>
             <h2 class="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
                 Executive Analytics Dashboard
+                <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">EAT (UTC+3)</span>
             </h2>
-            <p class="text-xs text-zinc-400">Real-time public statistics, historical snapshots, and growth intelligence</p>
+            <p class="text-xs text-zinc-400">Real-time public statistics, historical snapshots, and growth intelligence in East African Time</p>
         </div>
 
         <div class="flex items-center gap-3 self-start md:self-auto flex-wrap">
@@ -66,10 +67,10 @@
 
         <!-- Views Gained Today -->
         <div class="glass-panel p-3.5 rounded-xl border border-zinc-800/80 hover:border-emerald-500/30 transition-all flex flex-col justify-between">
-            <span class="text-[11px] font-medium text-zinc-400 truncate">Views Today</span>
+            <span class="text-[11px] font-medium text-zinc-400 truncate">Views Today (EAT)</span>
             <div class="mt-2">
                 <span class="text-lg font-bold text-emerald-400 tracking-tight">+{{ summary.views_today|intcomma }}</span>
-                <span class="text-[10px] text-zinc-500 block truncate">Stored snapshots</span>
+                <span class="text-[10px] text-zinc-500 block truncate">Since 00:00 EAT</span>
             </div>
         </div>
 
@@ -78,7 +79,7 @@
             <span class="text-[11px] font-medium text-zinc-400 truncate">Views This Week</span>
             <div class="mt-2">
                 <span class="text-lg font-bold text-teal-400 tracking-tight">+{{ summary.views_this_week|intcomma }}</span>
-                <span class="text-[10px] text-zinc-500 block truncate">Last 7 days</span>
+                <span class="text-[10px] text-zinc-500 block truncate">Last 7 days (EAT)</span>
             </div>
         </div>
 
@@ -87,7 +88,7 @@
             <span class="text-[11px] font-medium text-zinc-400 truncate">Views This Month</span>
             <div class="mt-2">
                 <span class="text-lg font-bold text-sky-400 tracking-tight">+{{ summary.views_this_month|intcomma }}</span>
-                <span class="text-[10px] text-zinc-500 block truncate">Last 30 days</span>
+                <span class="text-[10px] text-zinc-500 block truncate">Last 30 days (EAT)</span>
             </div>
         </div>
     </div>
@@ -96,8 +97,9 @@
     <div class="glass-panel p-6 rounded-2xl border border-zinc-800 space-y-4">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-                <h3 class="text-base font-bold text-white tracking-tight">
+                <h3 class="text-base font-bold text-white tracking-tight flex items-center gap-2">
                     Platform Performance Trajectory & Growth Statistics
+                    <span class="text-[10px] text-zinc-400 font-normal">(EAT Timezone)</span>
                 </h3>
                 <p class="text-xs text-zinc-400">Aggregated daily view gains and cumulative growth trajectory across all monitored catalog tracks</p>
             </div>

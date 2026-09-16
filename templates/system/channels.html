@@ -68,7 +68,7 @@
                         </span>
                     </td>
                     <td class="py-4 px-6 text-zinc-400 text-[11px]">
-                        {{ ch.last_synced_at|timesince|default:"Never" }} ago
+                        {% if ch.last_synced_at %}{{ ch.last_synced_at|timesince }} ago{% else %}<span class="text-zinc-400">Never synced</span>{% endif %}
                     </td>
                     <td class="py-4 px-6 text-right">
                         {% if user.can_manage_channels %}

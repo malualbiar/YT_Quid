@@ -770,12 +770,7 @@ class LyricsEngineService:
                 # confidence decode rather than silently skipping a hard segment.
                 effective_temp   = [0.0, 0.2, 0.4]
                 effective_cratio = 1.8
-                prompt_text = (
-                    initial_prompt if initial_prompt else
-                    "Song lyrics. Transcribe every sung word exactly as heard, "
-                    "including repeated phrases, chorus lines, and ad-libs. "
-                    "Do not summarise or paraphrase."
-                )
+                prompt_text = "Lyrics:"
             else:
                 # Conservative settings for a noisy full mix.
                 effective_model  = model_size
@@ -784,7 +779,7 @@ class LyricsEngineService:
                 effective_thresh = 0.2    # lowered from 0.3 — keeps quiet/breathy vocal passages
                 effective_temp   = None   # Whisper's default fallback schedule
                 effective_cratio = 2.4
-                prompt_text      = initial_prompt if initial_prompt else "Lyrics:"
+                prompt_text      = "Lyrics:"
 
             model = WhisperModel(effective_model, device="cpu", compute_type="int8")
 
@@ -884,6 +879,8 @@ class LyricsEngineService:
 
             # Known Whisper hallucination phrases — exact full-segment matches only
             _HALLUCINATION_PHRASES = {
+                "song lyrics. transcribe every sung word exactly as heard, including repeated phrases, chorus lines, and ad-libs. do not summarise or paraphrase",
+                "song lyrics. transcribe every sung word exactly as heard, including repeated phrases, chorus lines, and ad-libs.",
                 "song lyrics formatted in short musical bars and rhyming verse lines",
                 "lyrics formatted in short musical bars and rhyming verse lines",
                 "thank you for watching",
@@ -892,6 +889,7 @@ class LyricsEngineService:
                 "like and subscribe",
                 "subtitles by",
                 "transcribed by",
+                "lyrics",
             }
 
             def _is_hallucination(text):
@@ -952,8 +950,8 @@ class LyricsEngineService:
                             continue
                         all_words.append({
                             'word': raw_w,
-                            'start': round(w.start, 2),
-                            'end': round(w.end, 2)
+                            'start': max(0.0, round(w.start - 0.15, 2)),
+                            'end': max(0.0, round(w.end - 0.15, 2))
                         })
                 else:
                     words_list = seg_text.split()
@@ -964,8 +962,8 @@ class LyricsEngineService:
                             continue
                         all_words.append({
                             'word': wt,
-                            'start': round(seg.start + s_idx * slot, 2),
-                            'end': round(seg.start + (s_idx + 1) * slot, 2)
+                            'start': max(0.0, round(seg.start + s_idx * slot - 0.15, 2)),
+                            'end': max(0.0, round(seg.start + (s_idx + 1) * slot - 0.15, 2))
                         })
 
             # -----------------------------------------------------------------
@@ -1171,6 +1169,7 @@ class LyricsEngineService:
         title='',
         artist='',
         video_duration=0.0,
+        time_offset=0.0,
     ):
         """
         Generates Advanced SubStation Alpha (.ass) subtitle file with karaoke wipes,
@@ -1299,23 +1298,7 @@ class LyricsEngineService:
             "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
         ]
 
-        # Persistent title/artist card — top-left corner, fades in over 600ms then stays
-        _title_str = str(title or '').strip()
-        _artist_str = str(artist or '').strip()
-        if _title_str or _artist_str:
-            _tc_x = margin_lr + 10
-            _tc_y = int(margin_v * 0.5) + max(22, int(actual_font_size * 0.45))
-            if _artist_str and _title_str:
-                _card_text = f"{_artist_str}  \\N{_title_str}"
-            elif _title_str:
-                _card_text = _title_str
-            else:
-                _card_text = _artist_str
-            _end_sec = max(video_duration, 9999.0)
-            script_content.append(
-                f"Dialogue: 0,{cls.seconds_to_ass_time(0.0)},{cls.seconds_to_ass_time(_end_sec)},"
-                f"TitleCard,,0,0,0,,{{\\an7\\pos({_tc_x},{_tc_y})\\fad(600,0)}}{_card_text}"
-            )
+        # Removed persistent title/artist card to avoid constantly displaying the song name
 
         # Pre-compute center positions used by both ♪ placeholders and regular lines
         x_center = res_x // 2
@@ -1336,9 +1319,11 @@ class LyricsEngineService:
             # slow fade regardless of the chosen animation style. Skip transforms.
             if raw_line == '♪':
                 instr_color = cls.hex_to_ass_color(text_color, alpha=160)
+                p_start = max(0.0, float(item.get('start', 0.0)) + time_offset)
+                p_end = max(0.0, float(item.get('end', p_start + 4.0)) + time_offset)
                 script_content.append(
-                    f"Dialogue: 0,{cls.seconds_to_ass_time(float(item.get('start', 0.0)))},"
-                    f"{cls.seconds_to_ass_time(float(item.get('end', float(item.get('start', 0.0)) + 4.0)))},"
+                    f"Dialogue: 0,{cls.seconds_to_ass_time(p_start)},"
+                    f"{cls.seconds_to_ass_time(p_end)},"
                     f"RollingDim,,0,0,0,,"
                     f"{{\\pos({x_center},{y_center})\\c{instr_color}\\fad(400,400)}}♪"
                 )
@@ -1352,8 +1337,8 @@ class LyricsEngineService:
             elif text_transform == 'capitalize':
                 raw_line = raw_line.title()
 
-            start_sec = float(item.get('start', 0.0))
-            end_sec = float(item.get('end', start_sec + 4.0))
+            start_sec = max(0.0, float(item.get('start', 0.0)) + time_offset)
+            end_sec = max(0.0, float(item.get('end', start_sec + 4.0)) + time_offset)
             if end_sec <= start_sec:
                 end_sec = start_sec + 2.0
 
@@ -1375,8 +1360,8 @@ class LyricsEngineService:
                     words_list = [
                         {
                             'word': line_words_tokens[w_i],
-                            'start': words_list[w_i].get('start', start_sec),
-                            'end': words_list[w_i].get('end', end_sec)
+                            'start': max(0.0, float(words_list[w_i].get('start', start_sec)) + time_offset),
+                            'end': max(0.0, float(words_list[w_i].get('end', end_sec)) + time_offset)
                         }
                         for w_i in range(len(line_words_tokens))
                     ]
@@ -1412,9 +1397,7 @@ class LyricsEngineService:
                 script_content.append(f"Dialogue: 0,{start_time_str},{end_time_str},Main,,0,0,0,,{entry_tag}{karaoke_line}")
 
             elif animation_style == 'PLAYFUL_POP':
-                # Spring bounce entry + confetti burst of ✦ · ★ particles.
-                # Each confetti glyph gets a unique position offset, scale, and
-                # staggered start so they scatter outward on the beat of entry.
+                # Spring bounce entry
                 duration_ms = duration_cs * 10
                 exit_start_ms = max(200, duration_ms - 200)
                 s_x = font_scale_x
@@ -1429,44 +1412,8 @@ class LyricsEngineService:
                 )
                 script_content.append(f"Dialogue: 0,{start_time_str},{end_time_str},Main,,0,0,0,,{pop_tag}{raw_line}")
 
-                # Confetti particles — scatter outward from text center on entry,
-                # each fades out over ~400ms. Positions/sizes use a deterministic
-                # pattern seeded by line index so every line gets a unique burst.
-                confetti_glyphs = ['✦', '✧', '·', '★', '✦', '·', '✧', '★', '·', '✦']
-                confetti_offsets = [
-                    (-110, -35), ( 120, -28), (-80,  30), ( 90,  38),
-                    (-145, -10), ( 148,  12), (-50, -48), ( 55, -44),
-                    (-30,  50), (  35,  52),
-                ]
-                confetti_scales = [55, 40, 30, 60, 35, 28, 50, 45, 25, 38]
-                confetti_colors = [
-                    highlight_color, '#FFFFFF', highlight_color, '#FFFFFF',
-                    highlight_color, '#FFFFFF', highlight_color, '#FFFFFF',
-                    highlight_color, '#FFFFFF',
-                ]
-                for p_i, (glyph, (ox, oy), scale, color) in enumerate(zip(
-                    confetti_glyphs, confetti_offsets, confetti_scales, confetti_colors
-                )):
-                    p_delay_ms = p_i * 18   # stagger each particle by 18ms
-                    p_x = x_center + ox + ((idx * 7 + p_i * 13) % 30) - 15
-                    p_y = y_center + oy
-                    p_color = cls.hex_to_ass_color(color, alpha=0)
-                    # Each particle: appear at p_x/p_y, scale up then fade out
-                    p_start_sec = round(start_sec + p_delay_ms / 1000.0, 3)
-                    p_start_str = cls.seconds_to_ass_time(p_start_sec)
-                    p_end_str   = cls.seconds_to_ass_time(round(p_start_sec + 0.45, 3))
-                    script_content.append(
-                        f"Dialogue: 0,{p_start_str},{p_end_str},Main,,0,0,0,,"
-                        f"{{\\pos({p_x},{p_y})\\c{p_color}"
-                        f"\\fscx{scale}\\fscy{scale}"
-                        f"\\t(0,200,\\fscx{scale + 20}\\fscy{scale + 20})"
-                        f"\\fad(0,220)}}{glyph}"
-                    )
-
             elif animation_style == 'BUBBLE_BOUNCE':
-                # Elastic bounce entry + rising ○ bubble particles.
-                # Bubbles spawn near the text, drift upward at different speeds,
-                # and fade out — giving a light, airy, soapy feel.
+                # Elastic bounce entry
                 duration_ms = duration_cs * 10
                 mid_ms = duration_ms // 2
                 s_x = font_scale_x
@@ -1481,44 +1428,8 @@ class LyricsEngineService:
                 )
                 script_content.append(f"Dialogue: 0,{start_time_str},{end_time_str},Main,,0,0,0,,{bubble_tag}{raw_line}")
 
-                # Bubble particles — ○ glyphs of varying sizes rising upward.
-                # Each bubble has a unique x-offset, rise speed (via move y delta),
-                # size, and delay. They stay alive for 0.7–1.1s then fade out.
-                bubble_configs = [
-                    # (x_offset, y_start_offset, y_rise, scale, delay_ms, lifetime_ms)
-                    (-120,  20,  90, 38, 0,   900),
-                    (  80,  18, 110, 28, 80,  800),
-                    ( 150,  10,  75, 50, 160, 950),
-                    ( -60,  25,  95, 22, 240, 750),
-                    ( -185, 15, 120, 32, 100, 1000),
-                    ( 195,  22,  85, 42, 200, 850),
-                    (  30,  28, 100, 18, 320, 700),
-                    ( -95,  12,  80, 36, 50,  900),
-                ]
-                b_color = cls.hex_to_ass_color(highlight_color, alpha=50)
-                for b_i, (bx_off, by_off, y_rise, bscale, delay_ms, lifetime_ms) in enumerate(bubble_configs):
-                    b_start_sec = round(start_sec + delay_ms / 1000.0, 3)
-                    b_end_sec   = round(b_start_sec + lifetime_ms / 1000.0, 3)
-                    # Cap bubble lifetime to line end
-                    b_end_sec = min(b_end_sec, end_sec)
-                    if b_end_sec <= b_start_sec:
-                        continue
-                    b_start_str = cls.seconds_to_ass_time(b_start_sec)
-                    b_end_str   = cls.seconds_to_ass_time(b_end_sec)
-                    b_x = x_center + bx_off + ((idx * 11 + b_i * 17) % 24) - 12
-                    b_y_from = y_center + by_off
-                    b_y_to   = y_center + by_off - y_rise
-                    script_content.append(
-                        f"Dialogue: 0,{b_start_str},{b_end_str},Main,,0,0,0,,"
-                        f"{{\\move({b_x},{b_y_from},{b_x},{b_y_to})"
-                        f"\\c{b_color}\\fscx{bscale}\\fscy{bscale}"
-                        f"\\fad(80,300)}}○"
-                    )
-
             elif animation_style == 'DREAMY_DRIFT':
-                # Drift + ♪ ♫ floating music note particles.
-                # Notes appear near the text and float upward, fading as they rise —
-                # reinforcing the ethereal, musical atmosphere of the preset.
+                # Drift 
                 duration_ms = duration_cs * 10
                 exit_start_ms = max(300, duration_ms - 400)
                 drift_tag = (
@@ -1528,35 +1439,6 @@ class LyricsEngineService:
                     f"\\fad(300,350)}}"
                 )
                 script_content.append(f"Dialogue: 0,{start_time_str},{end_time_str},Main,,0,0,0,,{drift_tag}{raw_line}")
-
-                # Floating note particles — ♪ ♫ drift upward and dissolve.
-                note_configs = [
-                    # (x_offset, y_start_offset, y_rise, scale, delay_ms, lifetime_ms)
-                    (-160,  10, 100, 55, 0,   1200),
-                    ( 170,   8,  80, 45, 300, 1000),
-                    ( -80,  15, 120, 35, 600, 1100),
-                    ( 110,  12,  90, 50, 150, 1300),
-                    (-210,   5, 110, 40, 450, 900),
-                ]
-                note_glyphs = ['♪', '♫', '♪', '♫', '♪']
-                note_color = cls.hex_to_ass_color(highlight_color, alpha=60)
-                for n_i, (nx_off, ny_off, y_rise, nscale, delay_ms, lifetime_ms) in enumerate(note_configs):
-                    n_start_sec = round(start_sec + delay_ms / 1000.0, 3)
-                    n_end_sec   = round(n_start_sec + lifetime_ms / 1000.0, 3)
-                    n_end_sec   = min(n_end_sec, end_sec)
-                    if n_end_sec <= n_start_sec:
-                        continue
-                    n_start_str = cls.seconds_to_ass_time(n_start_sec)
-                    n_end_str   = cls.seconds_to_ass_time(n_end_sec)
-                    n_x = x_center + nx_off + ((idx * 9 + n_i * 19) % 20) - 10
-                    n_y_from = y_center + ny_off
-                    n_y_to   = y_center + ny_off - y_rise
-                    script_content.append(
-                        f"Dialogue: 0,{n_start_str},{n_end_str},Main,,0,0,0,,"
-                        f"{{\\move({n_x},{n_y_from},{n_x},{n_y_to})"
-                        f"\\c{note_color}\\fscx{nscale}\\fscy{nscale}"
-                        f"\\blur1\\fad(150,400)}}{note_glyphs[n_i]}"
-                    )
 
             elif animation_style == 'NEON_GLOW':
                 # Two-layer neon effect:
@@ -2034,7 +1916,8 @@ class LyricsEngineService:
         title='Lyric Video',
         artist='',
         loop_video=True,
-        project_id=None
+        project_id=None,
+        time_offset=0.0,
     ):
         """
         Renders complete 1080p synchronized lyric video using local FFmpeg and ASS subtitle engine.
@@ -2113,6 +1996,7 @@ class LyricsEngineService:
                 title=title,
                 artist=artist,
                 video_duration=duration,
+                time_offset=time_offset,
             )
 
             # Escape subtitle path for FFmpeg filter on Windows

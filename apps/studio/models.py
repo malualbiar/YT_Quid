@@ -405,6 +405,7 @@ class LyricVideoProject(models.Model):
     font_scale_x = models.IntegerField(default=100)
     font_scale_y = models.IntegerField(default=100)
     bg_opacity = models.IntegerField(default=0)
+    time_offset = models.FloatField(default=0.0)  # seconds to shift subtitle timing (negative = earlier)
 
     output_video = models.FileField(upload_to='studio/lyrics_output/', blank=True, null=True)
     duration_seconds = models.FloatField(default=0.0)

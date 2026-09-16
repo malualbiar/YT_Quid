@@ -120,4 +120,49 @@ class ViewRoutingAndTemplateTests(TestCase):
         self.assertGreater(len(data['artists']), 0)
         self.assertEqual(data['artists'][0]['name'], 'Luna Vance')
 
+    def test_revenue_forecasting_timeline_and_no_collected_status(self):
+        self.client.force_login(self.user)
+        # Create a Short video to test format-weighted revenue accuracy
+        short_vid = Video.objects.create(
+            youtube_video_id='short101',
+            channel=self.channel,
+            artist=self.artist,
+            title='Short Viral Clip #shorts',
+            published_at=timezone.now(),
+            duration_seconds=30,
+            video_url='https://youtube.com/shorts/short101',
+            views_this_month=10000,
+            current_views=10000
+        )
+        response = self.client.get(reverse('revenue_prediction'))
+        self.assertEqual(response.status_code, 200)
+        
+        forecast = response.context['forecast']
+        summaries = forecast['monthly_summaries']
+        
+        # 1. Check timeline includes current month
+        self.assertTrue(len(summaries) >= 1)
+        cur_summary = summaries[-1]
+        self.assertTrue(cur_summary['is_current'])
+        self.assertEqual(cur_summary['status'], 'Current Month')
+
+        # 2. Check no month is marked as 'Collected'
+        for ms in summaries:
+            self.assertNotEqual(ms['status'], 'Collected')
+            self.assertIn(ms['status'], ['Historical', 'Current Month'])
+
+        # 3. Check format totals and accurate format-weighted RPM
+        format_totals = forecast['format_totals']
+        self.assertIn('Shorts', format_totals)
+        self.assertIn('Standard Track', format_totals)
+        self.assertEqual(format_totals['Shorts']['count'], 1)
+        # Shorts RPM (2.50 * 0.02 = 0.05) vs Standard Track RPM (2.50)
+        # For 10,000 views on Shorts at $0.05 RPM -> $0.50
+        short_entry = next((v for v in forecast['all_videos'] if v['id'] == short_vid.id), None)
+        self.assertIsNotNone(short_entry)
+        self.assertEqual(short_entry['format'], 'Shorts')
+        self.assertEqual(short_entry['rpm'], 0.05)
+        self.assertEqual(short_entry['monthly_revenue'], 0.50)
+
+
 

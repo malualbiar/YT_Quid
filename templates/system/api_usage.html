@@ -64,7 +64,7 @@
                         {{ u.request_count }} requests
                     </td>
                     <td class="py-3.5 px-6 text-right text-zinc-400">
-                        {% widthratio u.quota_used 100000 100 %}%
+                        {% widthratio u.quota_used quota_limit 100 %}%
                     </td>
                 </tr>
                 {% empty %}
