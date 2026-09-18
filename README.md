@@ -6,21 +6,21 @@ Available as both a **Web Server** and a **Standalone Native Windows Desktop App
 
 ---
 
-## 📥 Download Desktop Application (Windows)
+##  Download Desktop Application (Windows)
 
 Get the latest version of YT Quid for Windows directly from the GitHub releases:
 
 | Package | Download Link | Description |
 | :--- | :--- | :--- |
-| **Windows Installer** | 📦 [**Download `YT Quid Setup.exe`**](https://github.com/malualbiar/YoutubeAnalytics/releases/latest) | Recommended. Full installer with Desktop & Start Menu shortcuts, auto-updater, and uninstaller. |
-| **Portable Version** | ⚡ [**Download `YT Quid Portable.exe`**](https://github.com/malualbiar/YoutubeAnalytics/releases/latest) | Zero-installation standalone executable. Run directly from any folder or USB drive. |
-| **All Releases & Notes** | 📋 [**View GitHub Releases**](https://github.com/malualbiar/YoutubeAnalytics/releases) | Release notes, changelog history, and SHA-256 checksums. |
+| **Windows Installer** |  [**Download `YT Quid Setup.exe`**](https://github.com/malualbiar/YoutubeAnalytics/releases/latest) | Recommended. Full installer with Desktop & Start Menu shortcuts, auto-updater, and uninstaller. |
+| **Portable Version** |  [**Download `YT Quid Portable.exe`**](https://github.com/malualbiar/YoutubeAnalytics/releases/latest) | Zero-installation standalone executable. Run directly from any folder or USB drive. |
+| **All Releases & Notes** |  [**View GitHub Releases**](https://github.com/malualbiar/YoutubeAnalytics/releases) | Release notes, changelog history, and SHA-256 checksums. |
 
 ---
 
-## 🌟 Key Features
+##  Key Features
 
-### 1. 📊 Interactive Analytics & Catalog Monitoring
+### 1.  Interactive Analytics & Catalog Monitoring
 - **Real-Time Channel & Video Tracking**: Connect official YouTube channels via channel URL, `@handle`, or raw Channel ID (`UC...`).
 - **Growth Calculations & Snapshots**: Accurately tracks **Total Cumulative Views** vs. **Views Gained** (today, this week, this month, 90D, 1Y, all-time).
 - **Side-by-Side Comparisons**: Multi-artist and multi-video benchmarking matrices with multi-line growth charts.
@@ -28,13 +28,13 @@ Get the latest version of YT Quid for Windows directly from the GitHub releases:
 - **Daily Upload Tracker**: 30-day activity heatmap, streak counter, and customizable posting goals.
 - **Executive Reports**: One-click CSV and printable PDF export.
 
-### 2. 📡 AI Music Discovery Radar (`/radar/`)
+### 2.  AI Music Discovery Radar (`/radar/`)
 - **Granular Time Filtering**: Real-time discovery of breakout AI music (Suno, Udio, Lofi, Synthwave, Hip-Hop, Pop, Rock) published in the past 30m, 1h, 6h, 12h, 24h, 48h, 7d, or 30d.
 - **Velocity Arbitrage**: Sort by views/hour or filter by underdogs (<10K views) to catch rising trends before they saturate.
 - **Lossless Extraction**: 1-click lossless WAV / MP3 audio downloader powered by `yt-dlp`.
 - **Direct Studio Bridge**: 1-click export from Radar directly into the Creator Studio.
 
-### 3. 🎬 Creator Studio & Automated Video Factory (`/studio/`)
+### 3.  Creator Studio & Automated Video Factory (`/studio/`)
 - **Synced Lyric Video Generator (`/studio/lyrics/`)**:
   - **Whisper AI & LRCLIB Integration**: Auto-transcribe vocals or query synced lyric databases in seconds.
   - **Interactive Tap-to-Sync (Karaoke Mode)**: Play audio and tap `Spacebar` on lyric hits for rhythm precision.
@@ -52,11 +52,11 @@ Get the latest version of YT Quid for Windows directly from the GitHub releases:
 - **1-Hour Extended Study Loops & Visualizers**:
   - 60-minute seamless watch-time loops and 1080p official visualizers.
 
-### 4. 🚀 YouTube Automated Publishing & Drafts Dispatcher (`/publishing/`)
+### 4.  YouTube Automated Publishing & Drafts Dispatcher (`/publishing/`)
 - **Multi-Engine Publishing Architecture**:
-  - ⚡ **YouTube Data API v3**: Background resumable chunked upload engine (10MB chunks) via official Google OAuth 2.0.
-  - 🤖 **Zero-Quota Browser Bot Automation**: Playwright-powered background bot for automated YouTube Studio upload sessions with 0 API quota consumption.
-  - 📋 **1-Click Studio Assistant**: Pre-populates video titles, descriptions, and chapters to clipboard, reveals files in Explorer, and opens YouTube Studio.
+  -  **YouTube Data API v3**: Background resumable chunked upload engine (10MB chunks) via official Google OAuth 2.0.
+  -  **Zero-Quota Browser Bot Automation**: Playwright-powered background bot for automated YouTube Studio upload sessions with 0 API quota consumption.
+  -  **1-Click Studio Assistant**: Pre-populates video titles, descriptions, and chapters to clipboard, reveals files in Explorer, and opens YouTube Studio.
 - **Full Video Format Coverage**:
   - Direct 1-click dispatch from all Creator Studio modules (Lyric Videos, Shorts/Chops, Non-Stop Mixes, 1-Hour Loops, or Custom MP4 files).
   - **Batch Shorts Dispatch**: Drip-schedule multiple generated Shorts over consecutive days.
@@ -72,11 +72,11 @@ Get the latest version of YT Quid for Windows directly from the GitHub releases:
 
 ---
 
-## 💻 Standalone Desktop Application (v1.3.0)
+##  Standalone Desktop Application (v1.3.0)
 
 YT Quid runs as a native desktop application with an embedded Python/Django WSGI server powered by **Waitress** and an **Electron** frontend.
 
-👉 **[Download the Latest Windows Release (v1.3.0)](https://github.com/malualbiar/YoutubeAnalytics/releases/latest)**
+ **[Download the Latest Windows Release (v1.3.0)](https://github.com/malualbiar/YoutubeAnalytics/releases/latest)**
 
 ### Desktop Architecture
 - **Zero Configuration**: Automatically applies database migrations and seeds initial demo data on first launch.
@@ -85,7 +85,7 @@ YT Quid runs as a native desktop application with an embedded Python/Django WSGI
 
 ---
 
-## 🛠️ Building the Desktop App Locally
+##  Building the Desktop App Locally
 
 ### 1. Prerequisites
 - Python 3.10+ installed
@@ -120,7 +120,7 @@ Outputs are generated in `dist-electron/`:
 
 ---
 
-## 🚀 CI/CD Automated Release Workflows
+##  CI/CD Automated Release Workflows
 
 The repository includes a GitHub Actions workflow located at [`.github/workflows/release-desktop.yml`](.github/workflows/release-desktop.yml) for building and publishing desktop releases.
 
@@ -144,7 +144,7 @@ The repository includes a GitHub Actions workflow located at [`.github/workflows
 
 ---
 
-## ☁️ Deploying to Render
+##  Deploying to Render
 
 YT Quid ships with a [`render.yaml`](render.yaml) Blueprint and a [`build.sh`](build.sh) script for one-click deployment on [Render](https://render.com).
 
@@ -189,7 +189,7 @@ The [`build.sh`](build.sh) script runs automatically on every deploy:
 
 ---
 
-## 🌐 Running in Web Server Mode
+##  Running in Web Server Mode
 
 You can also run YT Quid as a standard web application:
 
@@ -211,7 +211,7 @@ Visit **`http://127.0.0.1:8000/`** in your browser.
 
 ---
 
-## 🔑 YouTube & Google Cloud API Setup
+##  YouTube & Google Cloud API Setup
 
 1. **YouTube Data API v3 Key** (for syncing analytics, video stats, and Radar):
    - Obtain an API key from Google Cloud Console.
@@ -229,7 +229,7 @@ Visit **`http://127.0.0.1:8000/`** in your browser.
 
 ---
 
-## 👥 Demo Accounts
+##  Demo Accounts
 
 The database comes pre-seeded with 4 active artists (*Luna Vance*, *Kairo Beats*, *Nova Sound*, *Aria Vega*), 22+ songs, 30 days of historical snapshots, and 3 demo user roles:
 
@@ -241,7 +241,7 @@ The database comes pre-seeded with 4 active artists (*Luna Vance*, *Kairo Beats*
 
 ---
 
-## 🧪 Running Automated Tests
+##  Running Automated Tests
 
 Run the test suite across all modules:
 ```bash
@@ -250,7 +250,7 @@ python manage.py test
 
 ---
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 YoutubeAnalytics/
