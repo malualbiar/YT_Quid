@@ -1,133 +1,143 @@
-{# Shared track card partial for radar/index.html                             #}
-{# Variables: track (dict), compact (bool — tighter layout for genre strips) #}
+{# Track card partial for AI Radar #}
+{# Variables: track (dict) #}
 
-<div class="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden flex flex-col justify-between hover:border-zinc-700 transition-all duration-200 track-card"
+<div class="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden flex flex-col justify-between hover:border-zinc-700 transition-all duration-200 track-card group"
      id="card-{{ track.video_id }}"
      data-video-id="{{ track.video_id }}">
 
     <!-- Thumbnail -->
-    <div class="relative {% if compact %}aspect-video{% else %}aspect-video{% endif %} w-full bg-zinc-950 overflow-hidden group">
+    <div class="relative aspect-video w-full bg-zinc-950 overflow-hidden">
         <img src="{{ track.thumbnail_url }}" alt="{{ track.title }}"
              class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy">
 
-        <!-- Top-left: Generator + Genre -->
-        <div class="absolute top-2 left-2 flex items-center gap-1 flex-wrap">
-            <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-black/85 text-violet-300 border border-violet-500/30 backdrop-blur-sm leading-tight">
-                {{ track.generator }}
+        <!-- Top-left: Potential Badge -->
+        <div class="absolute top-2 left-2">
+            {% if track.potential_tier == 'breakout' %}
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-violet-600/90 text-white border border-violet-400/50 backdrop-blur-md">
+                {{ track.potential_score }} Potential
             </span>
-            {% if track.detected_genre and track.detected_genre != 'AI Music' %}
-            <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-black/85 text-zinc-300 border border-white/10 backdrop-blur-sm leading-tight">
-                {{ track.detected_genre }}
+            {% elif track.potential_tier == 'high' %}
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-600/90 text-white border border-amber-400/50 backdrop-blur-md">
+                {{ track.potential_score }} Potential
+            </span>
+            {% elif track.potential_tier == 'promising' %}
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-sky-700/80 text-white border border-sky-500/40 backdrop-blur-md">
+                {{ track.potential_score }} Potential
+            </span>
+            {% else %}
+            <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-black/80 text-zinc-300 border border-zinc-700 backdrop-blur-md">
+                {{ track.potential_score }} Potential
             </span>
             {% endif %}
         </div>
 
-        <!-- Top-right: time -->
+        <!-- Top-right: Time posted -->
         <div class="absolute top-2 right-2">
-            <span class="px-1.5 py-0.5 rounded text-[10px] font-medium bg-black/85 text-zinc-300 border border-white/10 backdrop-blur-sm leading-tight">
+            <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-black/85 text-zinc-200 border border-white/10 backdrop-blur-sm">
                 {{ track.relative_time }}
             </span>
         </div>
 
-        <!-- Bottom-right: duration -->
+        <!-- Bottom-right: Duration -->
         <div class="absolute bottom-2 right-2">
-            <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-black/85 text-zinc-300 backdrop-blur-sm leading-tight">
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-black/85 text-zinc-300 backdrop-blur-sm">
                 {{ track.duration }}
             </span>
         </div>
 
-        <!-- Bottom-left: velocity -->
+        <!-- Bottom-left: Like Velocity -->
         <div class="absolute bottom-2 left-2">
-            <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-950/90 text-emerald-400 border border-emerald-500/30 backdrop-blur-sm flex items-center gap-1 leading-tight">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></span>
-                {{ track.velocity_vph|floatformat:0 }} vph
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950/90 text-emerald-400 border border-emerald-500/30 backdrop-blur-sm flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                +{{ track.like_velocity|floatformat:1 }} likes/hr
             </span>
         </div>
 
-        <!-- Hover play overlay -->
+        <!-- Hover Play Overlay -->
         <button type="button"
-                onclick="toggleAudition('{{ track.video_id }}', '{{ track.title|escapejs }}', '{{ track.artist|escapejs }}', '{{ track.thumbnail_url|escapejs }}', '{{ track.generator|escapejs }}')"
-                class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 backdrop-blur-[2px]">
-            <span class="px-3 py-1.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold shadow-xl flex items-center gap-1.5 transform group-hover:scale-105 transition-all">
-                <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                Audition
+                onclick="playMediaOnPage('{{ track.video_id }}', '{{ track.title|escapejs }}', '{{ track.channel_title|escapejs }}', '{{ track.thumbnail_url|escapejs }}')"
+                class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/55 backdrop-blur-[2px]">
+            <span class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold shadow-2xl flex items-center gap-2 transform group-hover:scale-105 transition-all">
+                <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                Play
             </span>
         </button>
     </div>
 
-    <!-- Info -->
-    <div class="p-3 space-y-2 flex-1">
-        <!-- AI detection badge -->
-        {% if track.is_youtube_flagged %}
-        <div class="flex items-center gap-1.5 px-2 py-1 rounded-md
-            {% if track.flag_badge == 'AI Detected (Unlabeled)' %}bg-amber-500/10 border border-amber-500/25 text-amber-400
-            {% else %}bg-emerald-500/10 border border-emerald-500/25 text-emerald-400{% endif %}
-            text-[10px] font-semibold">
-            {% if track.flag_badge == 'AI Detected (Unlabeled)' %}
-            <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+    <!-- Info Section -->
+    <div class="p-3.5 space-y-2.5 flex-1">
+        <!-- Channel Header -->
+        <div class="flex items-center gap-2">
+            {% if track.channel_avatar %}
+            <img src="{{ track.channel_avatar }}" alt="{{ track.channel_title }}" class="w-5 h-5 rounded-full object-cover border border-zinc-700 shrink-0">
             {% else %}
-            <svg class="w-3 h-3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+            <div class="w-5 h-5 rounded-full bg-zinc-800 text-zinc-300 flex items-center justify-center text-[10px] font-bold shrink-0">
+                {{ track.channel_title|slice:":1" }}
+            </div>
             {% endif %}
-            <span class="truncate">{{ track.flag_badge }}</span>
-            {% if track.music_confidence %}
-            <span class="ml-auto font-mono text-[9px] opacity-70 shrink-0">{{ track.music_confidence }}%</span>
+            <span class="text-xs font-medium text-zinc-300 truncate max-w-[200px]" title="{{ track.channel_title }}">
+                {{ track.channel_title }}
+            </span>
+            {% if track.channel_handle %}
+            <span class="text-[10px] text-zinc-500 truncate">{{ track.channel_handle }}</span>
             {% endif %}
         </div>
-        {% endif %}
 
-        <!-- Title & artist -->
-        <div>
-            <h3 class="{% if compact %}text-xs{% else %}text-sm{% endif %} font-bold text-zinc-100 line-clamp-2 leading-snug hover:text-violet-400 transition-colors" title="{{ track.title }}">
-                {{ track.title }}
-            </h3>
-            <div class="flex items-center gap-1 text-[11px] text-zinc-400 mt-0.5">
-                <span class="text-violet-400 font-medium truncate max-w-[130px]">{{ track.artist }}</span>
-                {% if track.channel_title != track.artist %}
-                <span class="text-zinc-700">•</span>
-                <span class="text-zinc-500 truncate text-[10px] max-w-[100px]">{{ track.channel_title }}</span>
-                {% endif %}
-            </div>
-        </div>
+        <!-- Video Title -->
+        <h3 class="text-sm font-semibold text-white line-clamp-2 leading-snug hover:text-violet-400 transition-colors" title="{{ track.title }}">
+            {{ track.title }}
+        </h3>
 
-        <!-- Metrics row -->
-        <div class="flex items-center justify-between text-[11px] text-zinc-400 pt-1 border-t border-zinc-800/60">
-            <div class="flex items-center gap-2">
-                <span><strong class="text-zinc-200">{{ track.views|floatformat:0 }}</strong> views</span>
-                <span><strong class="text-zinc-200">{{ track.likes|floatformat:0 }}</strong> likes</span>
+        <!-- Key Metrics -->
+        <div class="grid grid-cols-3 gap-2 py-2 px-2.5 bg-zinc-950/60 rounded-lg border border-zinc-800/80 text-center">
+            <div>
+                <div class="text-[10px] text-zinc-500 font-medium">Likes</div>
+                <div class="text-xs font-bold text-white">{{ track.likes }}</div>
             </div>
-            {% if track.is_popular %}
-            <span class="text-[9px] font-medium px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700 shrink-0">Popular</span>
-            {% else %}
-            <span class="text-[9px] font-medium px-1.5 py-0.5 rounded bg-violet-950/60 text-violet-300 border border-violet-500/20 shrink-0">Rising</span>
-            {% endif %}
+            <div>
+                <div class="text-[10px] text-zinc-500 font-medium">Views</div>
+                <div class="text-xs font-bold text-zinc-200">{{ track.views }}</div>
+            </div>
+            <div>
+                <div class="text-[10px] text-zinc-500 font-medium">Like Ratio</div>
+                <div class="text-xs font-bold {% if track.engagement_ratio >= 8 %}text-emerald-400{% else %}text-zinc-300{% endif %}">
+                    {{ track.engagement_ratio }}%
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Action bar -->
-    <div class="p-3 pt-0 space-y-1.5">
-        <div class="grid grid-cols-12 gap-1.5">
+    <!-- Actions Footer -->
+    <div class="p-3 pt-0 space-y-2">
+        <!-- Play + Download row -->
+        <div class="grid grid-cols-12 gap-2">
             <button type="button"
                     id="btn-play-{{ track.video_id }}"
-                    onclick="toggleAudition('{{ track.video_id }}', '{{ track.title|escapejs }}', '{{ track.artist|escapejs }}', '{{ track.thumbnail_url|escapejs }}', '{{ track.generator|escapejs }}')"
-                    class="col-span-4 inline-flex items-center justify-center px-2 py-1.5 rounded-lg bg-violet-600/20 hover:bg-violet-600 text-violet-300 hover:text-white text-xs font-semibold border border-violet-500/30 transition-all">
-                <svg class="w-3 h-3 mr-1 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                <span class="play-label">Audition</span>
+                    onclick="playMediaOnPage('{{ track.video_id }}', '{{ track.title|escapejs }}', '{{ track.channel_title|escapejs }}', '{{ track.thumbnail_url|escapejs }}')"
+                    class="col-span-6 inline-flex items-center justify-center px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold shadow-sm transition-colors gap-1.5">
+                <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                <span class="play-label">Play</span>
             </button>
+
             <a href="{% url 'radar_download_audio' %}?video_id={{ track.video_id }}&format=wav&title={{ track.title|urlencode }}"
-               onclick="showDownloadFeedback(this, 'WAV')"
-               class="col-span-5 inline-flex items-center justify-center px-2 py-1.5 rounded-lg bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-semibold transition-colors">
-                <span>Lossless WAV</span>
-            </a>
-            <a href="{% url 'radar_download_audio' %}?video_id={{ track.video_id }}&format=mp3&title={{ track.title|urlencode }}"
-               onclick="showDownloadFeedback(this, 'MP3')"
-               class="col-span-3 inline-flex items-center justify-center px-2 py-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition-colors">
-                <span>MP3</span>
+               onclick="showDownloadFeedback(this)"
+               class="col-span-6 inline-flex items-center justify-center px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-semibold border border-zinc-700 transition-colors gap-1.5">
+                <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+                <span>Download WAV</span>
             </a>
         </div>
-        <button type="button" onclick="openStudioModal('{{ track.video_id }}', '{{ track.title|escapejs }}', '{{ track.thumbnail_url }}')"
-                class="w-full inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-800 text-zinc-300 hover:text-white text-xs font-medium border border-zinc-700/60 transition-colors gap-1.5">
-            <svg class="w-3 h-3 text-violet-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-            Send to Video Studio
+
+        <!-- Mark as Seen button -->
+        <button type="button"
+                id="seen-btn-{{ track.video_id }}"
+                onclick="markAsSeen('{{ track.video_id }}', '{{ track.title|escapejs }}')"
+                class="w-full inline-flex items-center justify-center px-3 py-1.5 rounded-lg bg-zinc-950 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs font-medium border border-zinc-800/80 hover:border-zinc-700 transition-colors gap-1.5">
+            <svg class="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+            </svg>
+            Mark as Seen
         </button>
     </div>
 </div>

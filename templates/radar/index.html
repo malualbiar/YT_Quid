@@ -1,322 +1,235 @@
 {% extends 'base.html' %}
 {% load humanize %}
 
-{% block title %}AI Music Radar | YT Quid{% endblock %}
+{% block title %}AI Radar | YT Quid{% endblock %}
 
 {% block content %}
-<div class="space-y-6 pb-28">
+<div class="space-y-6 pb-32">
 
     <!-- ── Header ─────────────────────────────────────────────────── -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-5">
         <div>
             <div class="flex items-center gap-2.5 flex-wrap">
-                <h1 class="text-xl font-bold tracking-tight text-white">AI Music Radar</h1>
-                <span class="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                    Live
+                <h1 class="text-2xl font-bold tracking-tight text-white">AI Radar</h1>
+                <span class="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse"></span>
+                    Channel Monitor
                 </span>
             </div>
             <p class="text-xs text-zinc-400 mt-1 max-w-xl">
-                Discover recently posted AI music — openly labelled, YouTube-flagged, and covertly generated tracks detected by audio fingerprinting. Audition, download lossless WAVs, or send to Studio.
+                Monitors recently uploaded videos from your tracked YouTube accounts, calculates future like potential, and provides instant on-page playback and lossless WAV downloads.
             </p>
         </div>
 
-        <div class="flex items-center gap-2 shrink-0">
-            <!-- View toggle -->
-            <div class="inline-flex rounded-lg bg-zinc-900 p-0.5 border border-zinc-800">
-                <a href="?q={{ query }}&genre={{ current_genre }}&mode={{ current_mode }}&time={{ current_time }}&duration={{ current_duration }}&popularity={{ current_popularity }}&sort={{ current_sort }}&view=grid"
-                   class="px-3 py-1.5 rounded-md text-xs font-semibold transition-all {% if not show_sections %}bg-zinc-700 text-white{% else %}text-zinc-400 hover:text-zinc-200{% endif %}">
-                    Grid
-                </a>
-                <a href="?q={{ query }}&genre={{ current_genre }}&mode={{ current_mode }}&time={{ current_time }}&duration={{ current_duration }}&popularity={{ current_popularity }}&sort={{ current_sort }}&view=sections"
-                   class="px-3 py-1.5 rounded-md text-xs font-semibold transition-all {% if show_sections %}bg-zinc-700 text-white{% else %}text-zinc-400 hover:text-zinc-200{% endif %}">
-                    By Genre
-                </a>
-            </div>
-            <a href="{% url 'studio_home' %}" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 transition-colors flex items-center gap-1.5">
-                <svg class="w-3.5 h-3.5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        <div class="flex items-center gap-2.5 shrink-0 flex-wrap">
+            <!-- Manage Channels Modal Trigger -->
+            <button type="button" onclick="openChannelsModal()"
+                    class="px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-xs font-semibold border border-zinc-700 transition-colors flex items-center gap-2 shadow-sm">
+                <svg class="w-4 h-4 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
-                Video Studio
+                <span>Tracked Accounts</span>
+                <span class="px-1.5 py-0.2 rounded bg-violet-600 text-[10px] font-bold text-white">{{ active_channels_count }}</span>
+            </button>
+
+            <!-- Force Refresh Button -->
+            <a href="{% url 'radar_refresh' %}"
+               class="px-3.5 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>Refresh Live</span>
             </a>
         </div>
     </div>
 
-    <!-- ── Filter Panel ───────────────────────────────────────────── -->
-    <div class="bg-zinc-900 rounded-xl border border-zinc-800 p-4 space-y-4">
+    <!-- ── Filter & Search Toolbar (0 Quota In-Memory Filter) ───────── -->
+    <div class="bg-zinc-900 rounded-xl border border-zinc-800 p-4 space-y-3">
         <form method="GET" action="{% url 'radar_feed' %}" class="space-y-3" id="radarFilterForm">
-            <input type="hidden" name="genre" id="selectedGenreInput" value="{{ current_genre }}">
-            <input type="hidden" name="mode"  id="selectedModeInput"  value="{{ current_mode }}">
-            <input type="hidden" name="view"  value="{% if show_sections %}sections{% else %}grid{% endif %}">
-
-            <!-- Detection Mode Strip -->
-            <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-zinc-800/80">
-                <div class="flex items-center gap-2 flex-wrap">
-                    <span class="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider">Detection:</span>
-                    <div class="inline-flex rounded-lg bg-zinc-950 p-0.5 border border-zinc-800 gap-0.5">
-                        {% for dm in detection_modes %}
-                        <button type="button" onclick="selectDetectionMode('{{ dm.id }}')"
-                                class="px-3 py-1 rounded-md text-xs font-semibold transition-all
-                                {% if current_mode == dm.id %}
-                                    {% if dm.id == 'yt_flagged' %}bg-emerald-600 text-white{% elif dm.id == 'ai_unlabeled' %}bg-amber-600 text-white{% else %}bg-zinc-700 text-white{% endif %}
-                                {% else %}text-zinc-400 hover:text-zinc-200{% endif %}">
-                            {{ dm.label }}
-                        </button>
-                        {% endfor %}
+            <!-- First Row: Search & Dropdowns -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
+                <!-- Search Query -->
+                <div class="lg:col-span-3">
+                    <div class="relative">
+                        <input type="text" name="q" value="{{ query }}" placeholder="Search title or channel…"
+                               class="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-8 pr-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-violet-500 transition-colors">
+                        <svg class="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
                     </div>
                 </div>
-                <span class="text-[10px] text-zinc-500 flex items-center gap-1.5">
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                    Category 10 Music + Altered Content Disclosures
-                </span>
-            </div>
 
-            <!-- Controls row -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 pt-1">
-                <div class="lg:col-span-4">
-                    <input type="text" name="q" value="{{ query }}" placeholder="Search AI songs, artists, prompts…"
-                           class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors">
+                <!-- Channel Selector -->
+                <div class="lg:col-span-2">
+                    <select name="channel" onchange="document.getElementById('radarFilterForm').submit()"
+                            class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-2 text-xs text-zinc-200 focus:outline-none focus:border-violet-500 cursor-pointer">
+                        <option value="all">All Channels ({{ active_channels_count }})</option>
+                        {% for ch in channels %}
+                        <option value="{{ ch.channel_id }}" {% if current_channel == ch.channel_id %}selected{% endif %}>
+                            {{ ch.channel_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
                 </div>
+
+                <!-- Time Window (Hours Ago) -->
                 <div class="lg:col-span-2">
                     <select name="time" onchange="document.getElementById('radarFilterForm').submit()"
-                            class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-zinc-600 cursor-pointer">
+                            class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-2 text-xs text-zinc-200 focus:outline-none focus:border-violet-500 cursor-pointer">
                         {% for tw in time_windows %}
                         <option value="{{ tw.id }}" {% if current_time == tw.id %}selected{% endif %}>{{ tw.label }}</option>
                         {% endfor %}
                     </select>
                 </div>
+
+                <!-- Minimum Likes -->
                 <div class="lg:col-span-2">
-                    <select name="duration" onchange="document.getElementById('radarFilterForm').submit()"
-                            class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-zinc-600 cursor-pointer">
-                        {% for d in duration_options %}
-                        <option value="{{ d.id }}" {% if current_duration == d.id %}selected{% endif %}>{{ d.label }}</option>
+                    <select name="min_likes" onchange="document.getElementById('radarFilterForm').submit()"
+                            class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-2 text-xs text-zinc-200 focus:outline-none focus:border-violet-500 cursor-pointer">
+                        {% for lk in min_likes_options %}
+                        <option value="{{ lk.value }}" {% if current_min_likes == lk.value %}selected{% endif %}>{{ lk.label }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="lg:col-span-2">
-                    <select name="popularity" onchange="document.getElementById('radarFilterForm').submit()"
-                            class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-zinc-600 cursor-pointer">
-                        {% for p in popularity_options %}
-                        <option value="{{ p.id }}" {% if current_popularity == p.id %}selected{% endif %}>{{ p.label }}</option>
+
+                <!-- Future Potential Rating -->
+                <div class="lg:col-span-3">
+                    <select name="min_potential" onchange="document.getElementById('radarFilterForm').submit()"
+                            class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-2 text-xs text-zinc-200 focus:outline-none focus:border-violet-500 cursor-pointer">
+                        {% for pot in potential_options %}
+                        <option value="{{ pot.value }}" {% if current_potential == pot.value %}selected{% endif %}>{{ pot.label }}</option>
                         {% endfor %}
                     </select>
-                </div>
-                <div class="lg:col-span-2 flex gap-2">
-                    <select name="sort" onchange="document.getElementById('radarFilterForm').submit()"
-                            class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-zinc-600 cursor-pointer">
-                        {% for s in sort_options %}
-                        <option value="{{ s.id }}" {% if current_sort == s.id %}selected{% endif %}>{{ s.label }}</option>
-                        {% endfor %}
-                    </select>
-                    <button type="submit" class="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-medium border border-zinc-700 transition-colors shrink-0">
-                        Go
-                    </button>
                 </div>
             </div>
 
-            <!-- Genre Pills -->
-            <div class="flex items-center gap-1.5 overflow-x-auto pt-1 no-scrollbar pb-0.5">
-                {% for g in genres %}
-                <button type="button" onclick="selectGenre('{{ g.id }}')"
-                        class="px-2.5 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors
-                        {% if current_genre == g.id %}bg-violet-600 text-white{% else %}bg-zinc-950 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border border-zinc-800/80{% endif %}">
-                    {{ g.label }}
-                </button>
-                {% endfor %}
+            <!-- Second Row: Sorting & Fast Action -->
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-zinc-800/80">
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <span class="text-[11px] text-zinc-400 font-medium whitespace-nowrap">Sort By:</span>
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        {% for s in sort_options %}
+                        <button type="button" onclick="setSortAndSubmit('{{ s.id }}')"
+                                class="px-2.5 py-1 rounded text-xs font-medium transition-colors
+                                {% if current_sort == s.id %}bg-violet-600 text-white shadow-sm{% else %}bg-zinc-950 text-zinc-400 hover:text-white border border-zinc-800{% endif %}">
+                            {{ s.label }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                    <input type="hidden" name="sort" id="sortInput" value="{{ current_sort }}">
+                </div>
+
+                <div class="flex items-center gap-3 self-end sm:self-auto text-xs text-zinc-500">
+                    <span>Last synced: <strong class="text-zinc-300 font-normal">{{ last_synced_str }}</strong></span>
+                    {% if query or current_time != '7d' or current_min_likes != 0 or current_channel != 'all' or current_potential != 0 or current_sort != 'potential' %}
+                    <a href="{% url 'radar_feed' %}" class="text-violet-400 hover:underline">Reset Filters</a>
+                    {% endif %}
+                </div>
             </div>
         </form>
     </div>
 
-    <!-- ── Status row ────────────────────────────────────────────── -->
-    <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400 px-0.5">
-        <div class="flex items-center gap-3 flex-wrap">
-            {% if not show_sections %}
-            <span>Showing <strong class="text-zinc-100">{{ total_tracks }}</strong> tracks</span>
-            {% endif %}
-            {% if current_mode == 'ai_unlabeled' %}
-            <span class="text-[11px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 font-medium flex items-center gap-1">
-                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-                AI Covert Detection Active
-            </span>
-            {% elif current_mode == 'yt_flagged' %}
-            <span class="text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-medium flex items-center gap-1">
-                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-                YouTube Disclosures Only
-            </span>
-            {% endif %}
-        </div>
-        <div class="flex items-center gap-3">
-            <a href="?q={{ query }}&genre={{ current_genre }}&mode={{ current_mode }}&time={{ current_time }}&duration={{ current_duration }}&popularity={{ current_popularity }}&sort={{ current_sort }}&view={% if show_sections %}sections{% else %}grid{% endif %}&refresh=1"
-               class="text-zinc-300 hover:text-white text-xs flex items-center gap-1">
-                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                Refresh Live
-            </a>
-            {% if query or current_time != '48h' or current_duration != 'all' or current_popularity != 'all' or current_mode != 'all' or current_genre != 'all' %}
-            <a href="{% url 'radar_feed' %}" class="text-violet-400 hover:underline text-xs">Reset</a>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- ══════════════════════════════════════════════════════════════
-         SECTIONS VIEW — Top 5 per Genre
-    ══════════════════════════════════════════════════════════════ -->
-    {% if show_sections and genre_sections %}
-    <div class="space-y-10">
-        {% for section in genre_sections %}
-        {% if section.tracks %}
+    <!-- ── Feed Summary ───────────────────────────────────────────── -->
+    <div class="flex items-center justify-between text-xs text-zinc-400 px-1">
         <div>
-            <!-- Section header -->
-            <div class="flex items-center justify-between mb-3">
-                <div class="flex items-center gap-2">
-                    <span class="w-2.5 h-2.5 rounded-full
-                        {% if section.color == 'violet' %}bg-violet-400
-                        {% elif section.color == 'orange' %}bg-orange-400
-                        {% elif section.color == 'pink' %}bg-pink-400
-                        {% elif section.color == 'amber' %}bg-amber-400
-                        {% elif section.color == 'red' %}bg-red-400
-                        {% elif section.color == 'sky' %}bg-sky-400
-                        {% elif section.color == 'emerald' %}bg-emerald-400
-                        {% elif section.color == 'indigo' %}bg-indigo-400
-                        {% else %}bg-cyan-400{% endif %}"></span>
-                    <h2 class="text-sm font-bold text-white">{{ section.label }}</h2>
-                    <span class="text-[10px] text-zinc-500 font-mono">top {{ section.tracks|length }} by velocity</span>
-                </div>
-                <a href="?genre={{ section.id }}&time={{ current_time }}&sort=velocity&view=grid"
-                   class="text-[11px] text-violet-400 hover:text-violet-300 hover:underline transition-colors">
-                    See all →
-                </a>
-            </div>
-
-            <!-- Horizontal scroll row of 5 cards -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                {% for track in section.tracks %}
-                {% include 'radar/_track_card.html' with track=track compact=True %}
-                {% endfor %}
-            </div>
+            Showing <strong class="text-white" data-track-count>{{ total_tracks }}</strong> recent release{{ total_tracks|pluralize }} across <strong class="text-white">{{ active_channels_count }}</strong> tracked channel{{ active_channels_count|pluralize }}
         </div>
-        {% endif %}
-        {% endfor %}
-    </div>
-
-    <!-- ══════════════════════════════════════════════════════════════
-         GRID VIEW — standard filtered track grid
-    ══════════════════════════════════════════════════════════════ -->
-    {% elif tracks %}
-
-    {# ── Top Genre Sections (shown on default landing above the main grid) ── #}
-    {% if genre_sections and current_genre == 'all' and not query and current_mode == 'all' %}
-    <div class="space-y-8 mb-2">
-        <!-- Section row header -->
-        <div class="flex items-center justify-between">
-            <h2 class="text-sm font-bold text-white flex items-center gap-2">
-                <svg class="w-4 h-4 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-                </svg>
-                Top Tracks by Genre
-            </h2>
-            <a href="?view=sections&time={{ current_time }}"
-               class="text-[11px] text-violet-400 hover:underline">View all genres →</a>
-        </div>
-
-        {% for section in genre_sections %}
-        {% if section.tracks %}
-        <div>
-            <div class="flex items-center justify-between mb-2.5">
-                <div class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full
-                        {% if section.color == 'violet' %}bg-violet-400
-                        {% elif section.color == 'orange' %}bg-orange-400
-                        {% elif section.color == 'pink' %}bg-pink-400
-                        {% elif section.color == 'amber' %}bg-amber-400
-                        {% elif section.color == 'red' %}bg-red-400
-                        {% elif section.color == 'sky' %}bg-sky-400
-                        {% elif section.color == 'emerald' %}bg-emerald-400
-                        {% elif section.color == 'indigo' %}bg-indigo-400
-                        {% else %}bg-cyan-400{% endif %}"></span>
-                    <span class="text-xs font-bold text-zinc-200">{{ section.label }}</span>
-                </div>
-                <a href="?genre={{ section.id }}&time={{ current_time }}&sort=velocity"
-                   class="text-[10px] text-violet-400 hover:text-violet-300 transition-colors">See all →</a>
-            </div>
-            <!-- Horizontal 5-card strip -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                {% for track in section.tracks %}
-                {% include 'radar/_track_card.html' with track=track compact=True %}
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-        {% endfor %}
-
-        <!-- Divider before main grid -->
-        <div class="border-t border-zinc-800 pt-4">
-            <h2 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                </svg>
-                All AI Music — Highest Velocity
-            </h2>
+        <div class="flex items-center gap-2 text-[11px]">
+            <span class="flex items-center gap-1 text-emerald-400">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Cached in-memory (0 API quota used)
+            </span>
         </div>
     </div>
-    {% endif %}
 
+    <!-- ── Video Grid ─────────────────────────────────────────────── -->
+    {% if tracks %}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="tracksGrid">
         {% for track in tracks %}
-        {% include 'radar/_track_card.html' with track=track compact=False %}
+        {% include 'radar/_track_card.html' with track=track %}
         {% endfor %}
+    </div>
+
+    {% elif not channels %}
+    <!-- Onboarding State: No channels added yet -->
+    <div class="bg-zinc-900 rounded-2xl border border-zinc-800 p-12 text-center space-y-4 max-w-xl mx-auto shadow-2xl">
+        <div class="w-16 h-16 rounded-full bg-violet-500/10 text-violet-400 flex items-center justify-center mx-auto border border-violet-500/20 text-2xl">
+            📡
+        </div>
+        <div>
+            <h3 class="text-base font-bold text-white">No YouTube Channels Tracked Yet</h3>
+            <p class="text-xs text-zinc-400 mt-1 max-w-md mx-auto">
+                Add YouTube accounts (artists, AI creators, or labels) to automatically monitor their recent uploads and detect breakout tracks before they peak.
+            </p>
+        </div>
+        <button type="button" onclick="openChannelsModal()"
+                class="inline-flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-bold shadow-lg transition-all transform hover:scale-105">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Add Your First Channel
+        </button>
     </div>
 
     {% else %}
-    <!-- Empty State -->
+    <!-- Filter Empty State -->
     <div class="bg-zinc-900 rounded-xl border border-zinc-800 p-12 text-center space-y-3">
-        <div class="w-12 h-12 rounded-full bg-violet-500/10 text-violet-400 flex items-center justify-center mx-auto border border-violet-500/20">
-            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-            </svg>
+        <div class="w-12 h-12 rounded-full bg-violet-500/10 text-violet-400 flex items-center justify-center mx-auto border border-violet-500/20 text-lg">
+            🔍
         </div>
-        <h3 class="text-sm font-semibold text-white">No tracks match your current filters</h3>
+        <h3 class="text-sm font-semibold text-white">No recent uploads match your current filters</h3>
         <p class="text-xs text-zinc-400 max-w-sm mx-auto">
-            Try switching detection mode to "All AI Music" or widening your time window (e.g. Past 7 days).
+            Try expanding the time window (e.g. Past 7 or 14 days), lowering the minimum likes, or refreshing the live feed.
         </p>
-        <a href="{% url 'radar_feed' %}" class="inline-block px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-medium border border-zinc-700 transition-colors mt-2">
-            Reset Filters
-        </a>
+        <div class="pt-2 flex items-center justify-center gap-2">
+            <a href="{% url 'radar_feed' %}" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-medium border border-zinc-700 transition-colors">
+                Reset Filters
+            </a>
+            <a href="{% url 'radar_refresh' %}" class="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-xs font-medium transition-colors">
+                Refresh Live Feed
+            </a>
+        </div>
     </div>
     {% endif %}
+
 </div>
 
-<!-- ── Floating Audition Dock Bar ──────────────────────────────── -->
-<div id="auditionDockBar" class="fixed bottom-4 left-4 right-4 max-w-5xl mx-auto z-40 bg-zinc-900/95 backdrop-blur-md border border-zinc-700 rounded-2xl shadow-2xl p-3 sm:p-4 transition-all duration-300 transform translate-y-32 opacity-0 pointer-events-none">
-    <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+<!-- ══════════════════════════════════════════════════════════════════
+     FLOATING MEDIA DOCK PLAYER (Plays On-Page)
+══════════════════════════════════════════════════════════════════ -->
+<div id="mediaDockPlayer" class="fixed bottom-4 left-4 right-4 max-w-5xl mx-auto z-40 bg-zinc-900/95 backdrop-blur-md border border-zinc-700 rounded-2xl shadow-2xl p-3.5 sm:p-4 transition-all duration-300 transform translate-y-32 opacity-0 pointer-events-none">
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+        <!-- Track metadata -->
         <div class="flex items-center gap-3 w-full sm:w-auto min-w-0">
             <div class="relative w-12 h-12 rounded-lg overflow-hidden bg-zinc-950 shrink-0 border border-zinc-700">
                 <img id="dockThumb" src="" alt="" class="w-full h-full object-cover">
                 <div id="dockWaveAnimation" class="absolute inset-0 bg-black/40 flex items-center justify-center gap-0.5 hidden">
-                    <span class="w-0.5 h-3 bg-emerald-400 animate-pulse"></span>
-                    <span class="w-0.5 h-5 bg-emerald-400 animate-pulse delay-75"></span>
-                    <span class="w-0.5 h-2 bg-emerald-400 animate-pulse delay-150"></span>
+                    <span class="w-0.5 h-3 bg-violet-400 animate-pulse"></span>
+                    <span class="w-0.5 h-5 bg-violet-400 animate-pulse delay-75"></span>
+                    <span class="w-0.5 h-2 bg-violet-400 animate-pulse delay-150"></span>
                 </div>
             </div>
             <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2">
-                    <h4 id="dockTitle" class="text-xs font-bold text-white truncate max-w-[200px] sm:max-w-xs">Song Title</h4>
-                    <span id="dockEngine" class="px-1.5 rounded text-[9px] font-semibold bg-violet-500/20 text-violet-300 border border-violet-500/30">AI</span>
-                </div>
-                <p id="dockArtist" class="text-[11px] text-zinc-400 truncate">Artist Name</p>
+                <h4 id="dockTitle" class="text-xs font-bold text-white truncate max-w-[180px] sm:max-w-xs">Song Title</h4>
+                <p id="dockArtist" class="text-[11px] text-zinc-400 truncate">Channel Name</p>
             </div>
         </div>
 
+        <!-- Player Controls & Scrubber -->
         <div class="flex flex-col items-center gap-1.5 w-full sm:w-1/2 max-w-md">
             <div class="flex items-center gap-4">
-                <button type="button" onclick="seekAudition(-10)" class="text-zinc-400 hover:text-white transition-colors" title="Rewind 10s">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.334 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z"/></svg>
+                <button type="button" onclick="seekDockMedia(-10)" class="text-zinc-400 hover:text-white transition-colors" title="Rewind 10s">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.334 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z"/>
+                    </svg>
                 </button>
                 <button type="button" id="dockPlayBtn" onclick="toggleDockPlay()" class="w-10 h-10 rounded-full bg-white hover:bg-zinc-200 text-black flex items-center justify-center shadow-lg transition-transform active:scale-95">
-                    <svg id="dockPlayIcon" class="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                    <svg id="dockPauseIcon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                    <svg id="dockPlayIcon" class="w-5 h-5 ml-0.5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    <svg id="dockPauseIcon" class="w-5 h-5 hidden fill-current" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
                 </button>
-                <button type="button" onclick="seekAudition(10)" class="text-zinc-400 hover:text-white transition-colors" title="Forward 10s">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z"/></svg>
+                <button type="button" onclick="seekDockMedia(10)" class="text-zinc-400 hover:text-white transition-colors" title="Forward 10s">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.933 12.8a1 1 0 000-1.6L6.6 7.2A1 1 0 005 8v8a1 1 0 001.6.8l5.333-4zM19.933 12.8a1 1 0 000-1.6l-5.333-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.333-4z"/>
+                    </svg>
                 </button>
             </div>
             <div class="flex items-center gap-2 w-full text-[10px] font-mono text-zinc-400">
@@ -327,12 +240,15 @@
             </div>
         </div>
 
+        <!-- Quick actions -->
         <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
-            <button type="button" id="dockStudioBtn" class="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 transition-colors flex items-center gap-1">
-                <svg class="w-3.5 h-3.5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                Studio
-            </button>
-            <button type="button" onclick="closeAuditionDock()" class="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors">
+            <a id="dockDownloadBtn" href="#" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-colors flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+                <span>WAV</span>
+            </a>
+            <button type="button" onclick="closeMediaDock()" class="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors">
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
         </div>
@@ -341,88 +257,165 @@
 
 <!-- Hidden YouTube Embed Player -->
 <div id="ytPlayerContainer" class="hidden pointer-events-none" style="position:absolute;left:-9999px;top:-9999px;">
-    <div id="ytAudioPlayer"></div>
+    <div id="ytOnPagePlayer"></div>
 </div>
 
-<!-- Studio Import Modal -->
-<div id="studioImportModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-zinc-900 w-full max-w-md rounded-xl border border-zinc-800 p-6 space-y-4 shadow-2xl relative">
-        <button type="button" onclick="closeStudioModal()" class="absolute right-4 top-4 text-zinc-400 hover:text-white text-sm font-bold">&times;</button>
-        <div>
-            <h3 class="text-base font-bold text-white">Send Track to Video Studio</h3>
-            <p class="text-xs text-zinc-400 mt-0.5">Download audio & artwork then configure a 1-Hour Loop project</p>
+<!-- ══════════════════════════════════════════════════════════════════
+     MANAGE TRACKED CHANNELS MODAL
+══════════════════════════════════════════════════════════════════ -->
+<div id="channelsManagerModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-zinc-900 w-full max-w-xl rounded-2xl border border-zinc-800 p-6 space-y-5 shadow-2xl relative max-h-[90vh] flex flex-col">
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between pb-3 border-b border-zinc-800">
+            <div>
+                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <span>📡</span> Tracked YouTube Channels
+                </h3>
+                <p class="text-xs text-zinc-400 mt-0.5">Add channels to monitor recent uploads and analyze future like potential</p>
+            </div>
+            <button type="button" onclick="closeChannelsModal()" class="text-zinc-400 hover:text-white text-lg font-bold p-1">&times;</button>
         </div>
-        <form method="POST" action="{% url 'radar_import_studio' %}" class="space-y-4">
+
+        <!-- Add Channel Form -->
+        <form method="POST" action="{% url 'radar_add_channel' %}" class="space-y-2">
             {% csrf_token %}
-            <input type="hidden" name="video_id" id="modalVideoId">
-            <input type="hidden" name="thumbnail_url" id="modalThumbnailUrl">
-            <div>
-                <label class="block text-xs font-medium text-zinc-300 mb-1">Project Title</label>
-                <input type="text" name="title" id="modalTitle" required
-                       class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-zinc-600">
-            </div>
-            <div>
-                <label class="block text-xs font-medium text-zinc-300 mb-1">Target Format</label>
-                <select name="video_format" class="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-zinc-600">
-                    {% for code, label in format_choices %}
-                    <option value="{{ code }}" {% if code == '1HOUR_LOOP' %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="pt-2 flex items-center justify-end gap-2">
-                <button type="button" onclick="closeStudioModal()" class="px-3 py-2 rounded-lg text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors">Cancel</button>
-                <button type="submit" class="px-4 py-2 rounded-lg bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-semibold transition-colors">Import & Open Studio</button>
+            <label class="block text-xs font-semibold text-zinc-300">Add YouTube Channel</label>
+            <div class="flex gap-2">
+                <input type="text" name="channel_input" required
+                       placeholder="e.g. https://youtube.com/@ChannelHandle, @handle, or UC..."
+                       class="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-violet-500">
+                <button type="submit" class="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-xs font-bold transition-colors shrink-0 flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Channel
+                </button>
             </div>
         </form>
+
+        <!-- Current Tracked Channels List -->
+        <div class="space-y-2 overflow-y-auto flex-1 pr-1 custom-scrollbar">
+            <h4 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Currently Monitored ({{ channels|length }})</h4>
+            {% if channels %}
+            <div class="space-y-2">
+                {% for ch in channels %}
+                <div class="flex items-center justify-between gap-3 p-3 bg-zinc-950 rounded-xl border border-zinc-800/80">
+                    <div class="flex items-center gap-3 min-w-0">
+                        {% if ch.thumbnail_url %}
+                        <img src="{{ ch.thumbnail_url }}" alt="{{ ch.channel_name }}" class="w-9 h-9 rounded-full object-cover border border-zinc-700 shrink-0">
+                        {% else %}
+                        <div class="w-9 h-9 rounded-full bg-violet-900/50 text-violet-300 flex items-center justify-center text-xs font-bold shrink-0">
+                            {{ ch.channel_name|slice:":1" }}
+                        </div>
+                        {% endif %}
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-1.5">
+                                <h5 class="text-xs font-bold text-white truncate max-w-[180px]">{{ ch.channel_name }}</h5>
+                                {% if ch.is_active %}
+                                <span class="w-2 h-2 rounded-full bg-emerald-400" title="Active"></span>
+                                {% else %}
+                                <span class="w-2 h-2 rounded-full bg-zinc-600" title="Paused"></span>
+                                {% endif %}
+                            </div>
+                            <p class="text-[11px] text-zinc-400 truncate">{{ ch.handle|default:ch.channel_id }}</p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 shrink-0">
+                        <!-- Toggle Active Form -->
+                        <form method="POST" action="{% url 'radar_toggle_channel' ch.channel_id %}">
+                            {% csrf_token %}
+                            <button type="submit" class="px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors
+                                {% if ch.is_active %}bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20{% else %}bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-white{% endif %}">
+                                {% if ch.is_active %}Active{% else %}Paused{% endif %}
+                            </button>
+                        </form>
+
+                        <!-- Delete Channel Form -->
+                        <form method="POST" action="{% url 'radar_delete_channel' ch.channel_id %}" onsubmit="return confirm('Remove {{ ch.channel_name|escapejs }} from tracked channels?');">
+                            {% csrf_token %}
+                            <button type="submit" class="p-1.5 rounded-md text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors" title="Remove Channel">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-6 text-zinc-500 text-xs bg-zinc-950/50 rounded-xl border border-zinc-800/50">
+                No channels added yet. Paste a YouTube URL or handle above to begin monitoring.
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="pt-2 border-t border-zinc-800 flex justify-end">
+            <button type="button" onclick="closeChannelsModal()" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-xs font-semibold transition-colors">
+                Done
+            </button>
+        </div>
     </div>
 </div>
 
 <script src="https://www.youtube.com/iframe_api"></script>
 <script>
     let ytPlayer = null, isYtReady = false;
-    let currentAuditionVideoId = null, currentTrackInfo = {};
+    let currentPlayingVideoId = null;
     let progressTimer = null;
 
     function onYouTubeIframeAPIReady() {
-        ytPlayer = new YT.Player('ytAudioPlayer', {
+        ytPlayer = new YT.Player('ytOnPagePlayer', {
             height: '180', width: '320',
-            playerVars: { playsinline:1, controls:0, disablekb:1, fs:0, rel:0, modestbranding:1 },
-            events: { onReady: e => { isYtReady = true; }, onStateChange: onPlayerStateChange }
+            playerVars: { playsinline: 1, controls: 0, disablekb: 1, fs: 0, rel: 0, modestbranding: 1 },
+            events: {
+                onReady: e => { isYtReady = true; },
+                onStateChange: onPlayerStateChange
+            }
         });
     }
 
     function onPlayerStateChange(event) {
-        const playing = (event.data === YT.PlayerState.PLAYING);
-        updateDockState(playing);
-        playing ? startProgressTracker() : stopProgressTracker();
+        const isPlaying = (event.data === YT.PlayerState.PLAYING);
+        updateDockPlayState(isPlaying);
+        isPlaying ? startProgressTracker() : stopProgressTracker();
     }
 
-    function toggleAudition(videoId, title, artist, thumb, generator) {
-        if (currentAuditionVideoId === videoId && ytPlayer && isYtReady) {
+    function playMediaOnPage(videoId, title, channelTitle, thumbnail) {
+        if (currentPlayingVideoId === videoId && ytPlayer && isYtReady) {
             ytPlayer.getPlayerState() === YT.PlayerState.PLAYING ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
             return;
         }
-        currentAuditionVideoId = videoId;
-        currentTrackInfo = { videoId, title, artist, thumb, generator };
 
-        const dock = document.getElementById('auditionDockBar');
-        dock.classList.remove('translate-y-32','opacity-0','pointer-events-none');
-        dock.classList.add('translate-y-0','opacity-100','pointer-events-auto');
+        currentPlayingVideoId = videoId;
 
-        document.getElementById('dockThumb').src   = thumb;
-        document.getElementById('dockTitle').innerText  = title;
-        document.getElementById('dockArtist').innerText = artist;
-        document.getElementById('dockEngine').innerText = generator;
-        document.getElementById('dockStudioBtn').onclick = () => openStudioModal(videoId, title, thumb);
+        // Show floating media dock
+        const dock = document.getElementById('mediaDockPlayer');
+        dock.classList.remove('translate-y-32', 'opacity-0', 'pointer-events-none');
+        dock.classList.add('translate-y-0', 'opacity-100', 'pointer-events-auto');
 
-        document.querySelectorAll('.track-card').forEach(c => c.classList.remove('ring-2','ring-violet-500','border-transparent'));
+        document.getElementById('dockThumb').src = thumbnail;
+        document.getElementById('dockTitle').innerText = title;
+        document.getElementById('dockArtist').innerText = channelTitle;
+        document.getElementById('dockDownloadBtn').href = `{% url 'radar_download_audio' %}?video_id=${videoId}&format=wav&title=${encodeURIComponent(title)}`;
+
+        // Highlight active card
+        document.querySelectorAll('.track-card').forEach(c => c.classList.remove('ring-2', 'ring-violet-500', 'border-transparent'));
         const card = document.getElementById(`card-${videoId}`);
-        if (card) card.classList.add('ring-2','ring-violet-500','border-transparent');
+        if (card) card.classList.add('ring-2', 'ring-violet-500', 'border-transparent');
 
         if (ytPlayer && isYtReady) {
-            ytPlayer.loadVideoById(videoId); ytPlayer.playVideo();
+            ytPlayer.loadVideoById(videoId);
+            ytPlayer.playVideo();
         } else {
-            setTimeout(() => { if (ytPlayer && isYtReady) { ytPlayer.loadVideoById(videoId); ytPlayer.playVideo(); } }, 800);
+            setTimeout(() => {
+                if (ytPlayer && isYtReady) {
+                    ytPlayer.loadVideoById(videoId);
+                    ytPlayer.playVideo();
+                }
+            }, 800);
         }
     }
 
@@ -431,69 +424,135 @@
         ytPlayer.getPlayerState() === YT.PlayerState.PLAYING ? ytPlayer.pauseVideo() : ytPlayer.playVideo();
     }
 
-    function updateDockState(playing) {
-        document.getElementById('dockPlayIcon').classList.toggle('hidden', playing);
-        document.getElementById('dockPauseIcon').classList.toggle('hidden', !playing);
-        document.getElementById('dockWaveAnimation').classList.toggle('hidden', !playing);
-        if (currentAuditionVideoId) {
-            const btn = document.getElementById(`btn-play-${currentAuditionVideoId}`);
-            if (btn) { const lbl = btn.querySelector('.play-label'); if (lbl) lbl.innerText = playing ? 'Pause' : 'Audition'; }
+    function updateDockPlayState(isPlaying) {
+        document.getElementById('dockPlayIcon').classList.toggle('hidden', isPlaying);
+        document.getElementById('dockPauseIcon').classList.toggle('hidden', !isPlaying);
+        document.getElementById('dockWaveAnimation').classList.toggle('hidden', !isPlaying);
+
+        if (currentPlayingVideoId) {
+            const btn = document.getElementById(`btn-play-${currentPlayingVideoId}`);
+            if (btn) {
+                const label = btn.querySelector('.play-label');
+                if (label) label.innerText = isPlaying ? 'Pause' : 'Play';
+            }
         }
     }
 
-    function seekAudition(s) {
+    function seekDockMedia(seconds) {
         if (!ytPlayer || !isYtReady) return;
-        const t = Math.max(0, Math.min(ytPlayer.getDuration()||0, (ytPlayer.getCurrentTime()||0)+s));
-        ytPlayer.seekTo(t, true);
+        const current = ytPlayer.getCurrentTime() || 0;
+        const duration = ytPlayer.getDuration() || 0;
+        const target = Math.max(0, Math.min(duration, current + seconds));
+        ytPlayer.seekTo(target, true);
     }
 
-    function onScrubberInput(pct) {
+    function onScrubberInput(percent) {
         if (!ytPlayer || !isYtReady) return;
-        ytPlayer.seekTo((pct/100) * (ytPlayer.getDuration()||0), true);
+        const duration = ytPlayer.getDuration() || 0;
+        ytPlayer.seekTo((percent / 100) * duration, true);
     }
 
     function startProgressTracker() {
         stopProgressTracker();
         progressTimer = setInterval(() => {
             if (!ytPlayer || !isYtReady) return;
-            const cur = ytPlayer.getCurrentTime()||0, dur = ytPlayer.getDuration()||0;
+            const cur = ytPlayer.getCurrentTime() || 0;
+            const dur = ytPlayer.getDuration() || 0;
             if (dur > 0) {
-                document.getElementById('dockScrubber').value = (cur/dur)*100;
-                document.getElementById('dockCurrentTime').innerText = fmtTime(cur);
-                document.getElementById('dockTotalTime').innerText   = fmtTime(dur);
+                document.getElementById('dockScrubber').value = (cur / dur) * 100;
+                document.getElementById('dockCurrentTime').innerText = formatTime(cur);
+                document.getElementById('dockTotalTime').innerText = formatTime(dur);
             }
         }, 500);
     }
 
-    function stopProgressTracker() { if (progressTimer) { clearInterval(progressTimer); progressTimer = null; } }
+    function stopProgressTracker() {
+        if (progressTimer) {
+            clearInterval(progressTimer);
+            progressTimer = null;
+        }
+    }
 
-    function fmtTime(s) { const m = Math.floor(s/60), ss = Math.floor(s%60); return `${m}:${ss<10?'0':''}${ss}`; }
+    function formatTime(s) {
+        const m = Math.floor(s / 60);
+        const sec = Math.floor(s % 60);
+        return `${m}:${sec < 10 ? '0' : ''}${sec}`;
+    }
 
-    function closeAuditionDock() {
+    function closeMediaDock() {
         if (ytPlayer && isYtReady) ytPlayer.stopVideo();
         stopProgressTracker();
-        const dock = document.getElementById('auditionDockBar');
-        dock.classList.add('translate-y-32','opacity-0','pointer-events-none');
-        dock.classList.remove('translate-y-0','opacity-100','pointer-events-auto');
-        document.querySelectorAll('.track-card').forEach(c => c.classList.remove('ring-2','ring-violet-500','border-transparent'));
-        currentAuditionVideoId = null;
+        const dock = document.getElementById('mediaDockPlayer');
+        dock.classList.add('translate-y-32', 'opacity-0', 'pointer-events-none');
+        dock.classList.remove('translate-y-0', 'opacity-100', 'pointer-events-auto');
+        document.querySelectorAll('.track-card').forEach(c => c.classList.remove('ring-2', 'ring-violet-500', 'border-transparent'));
+        currentPlayingVideoId = null;
     }
 
-    function selectGenre(id)  { document.getElementById('selectedGenreInput').value = id;  document.getElementById('radarFilterForm').submit(); }
-    function selectDetectionMode(id) { document.getElementById('selectedModeInput').value = id; document.getElementById('radarFilterForm').submit(); }
-
-    function showDownloadFeedback(el, fmt) {
-        const s = el.querySelector('span');
-        if (s) { const orig = s.innerText; s.innerText = `Preparing ${fmt}…`; setTimeout(()=>{ s.innerText = orig; }, 5000); }
+    function setSortAndSubmit(sortId) {
+        document.getElementById('sortInput').value = sortId;
+        document.getElementById('radarFilterForm').submit();
     }
 
-    function openStudioModal(videoId, title, thumb) {
-        document.getElementById('modalVideoId').value     = videoId;
-        document.getElementById('modalTitle').value       = title;
-        document.getElementById('modalThumbnailUrl').value = thumb;
-        document.getElementById('studioImportModal').classList.remove('hidden');
+    function showDownloadFeedback(el) {
+        const span = el.querySelector('span');
+        if (span) {
+            const original = span.innerText;
+            span.innerText = 'Downloading WAV…';
+            setTimeout(() => { span.innerText = original; }, 6000);
+        }
     }
 
-    function closeStudioModal() { document.getElementById('studioImportModal').classList.add('hidden'); }
+    function openChannelsModal() {
+        document.getElementById('channelsManagerModal').classList.remove('hidden');
+    }
+
+    function closeChannelsModal() {
+        document.getElementById('channelsManagerModal').classList.add('hidden');
+    }
+
+    function getCsrfToken() {
+        const el = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (el) return el.value;
+        const cookie = document.cookie.split(';').find(c => c.trim().startsWith('csrftoken='));
+        return cookie ? cookie.trim().split('=')[1] : '';
+    }
+
+    function markAsSeen(videoId, videoTitle) {
+        const card = document.getElementById(`card-${videoId}`);
+        const btn = document.getElementById(`seen-btn-${videoId}`);
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = 'Marking…';
+        }
+
+        fetch('{% url "radar_mark_seen" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken(),
+            },
+            body: JSON.stringify({ video_id: videoId, video_title: videoTitle }),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && card) {
+                // Animate out the card
+                card.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.93)';
+                setTimeout(() => card.remove(), 380);
+                // Update track count
+                const countEl = document.querySelector('[data-track-count]');
+                if (countEl) {
+                    const cur = parseInt(countEl.innerText) || 0;
+                    countEl.innerText = Math.max(0, cur - 1);
+                }
+            }
+        })
+        .catch(() => {
+            if (btn) { btn.disabled = false; btn.innerText = 'Mark as Seen'; }
+        });
+    }
 </script>
 {% endblock %}
