@@ -102,14 +102,12 @@ class GeminiContentService:
             except Exception:
                 _track_usage(len(prompt) // 4, len(text) // 4)
 
-            # Strip markdown json blocks if they exist
-            if text.startswith('```json'):
-                text = text[7:]
-            if text.startswith('```'):
-                text = text[3:]
-            if text.endswith('```'):
-                text = text[:-3]
-            text = text.strip()
+            import re
+            
+            # Find the first { and the last }
+            match = re.search(r'\{.*\}', text, re.DOTALL)
+            if match:
+                text = match.group(0)
 
             return json.loads(text)
         except json.JSONDecodeError as e:
