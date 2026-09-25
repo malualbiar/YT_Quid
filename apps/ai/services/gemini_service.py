@@ -63,7 +63,7 @@ class GeminiContentService:
     Results are cached by input hash to avoid duplicate API calls.
     """
 
-    MODEL = 'gemini-1.5-flash'
+    MODEL = 'gemini-3.5-flash'
     CACHE_TTL = 86400  # 24h
 
     # ── Internal helpers ──────────────────────────────────────────────────────
