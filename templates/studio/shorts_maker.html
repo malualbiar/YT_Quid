@@ -261,12 +261,26 @@
 
                     <!-- Chops List -->
                     <div class="space-y-3 pt-2">
-                        <div class="flex items-center justify-between">
+                        <div class="flex items-center justify-between flex-wrap gap-2">
                             <h4 class="text-xs font-bold text-zinc-300">
                                 Configured Chops (<span id="chopCountLabel">0</span>)
                             </h4>
-                            <span class="text-[11px] text-zinc-500">Click preview on any card to test audio/video</span>
+                            <div class="flex items-center gap-2">
+                                <!-- Tone selector -->
+                                <select id="aiToneSelect" class="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-[10px] text-zinc-300 focus:outline-none focus:border-violet-500/50">
+                                    <option value="viral">🔥 Viral</option>
+                                    <option value="professional">🎯 Professional</option>
+                                    <option value="chill">🎵 Chill</option>
+                                    <option value="educational">📚 Educational</option>
+                                    <option value="hype">⚡ Hype</option>
+                                </select>
+                                <!-- AI Fill All button -->
+                                <button type="button" id="aiFillAllBtn" onclick="aiFillAllChops()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600/20 hover:bg-violet-600/40 border border-violet-500/30 text-violet-300 text-[10px] font-bold transition-colors">
+                                    🪄 AI Fill All
+                                </button>
+                            </div>
                         </div>
+                        <span class="text-[11px] text-zinc-500 block">Click preview on any card to test audio/video</span>
 
                         <div id="chopsListContainer" class="space-y-3 max-h-96 overflow-y-auto pr-1">
                             <!-- Dynamic Chop Cards Inserted Here -->
@@ -1318,7 +1332,19 @@
                                 <button type="button" onclick="updateChop(${idx}, 'hook_position', 'BOTTOM')" class="px-1.5 py-0.5 rounded font-semibold transition-colors ${curPos === 'BOTTOM' ? 'bg-emerald-500 text-zinc-950' : 'text-zinc-400 hover:text-zinc-200'}">Bot</button>
                             </div>
                         </div>
-                        <input type="text" value="${chop.hook_text || ''}" placeholder="${!isBannerOn ? '(Banner Disabled for this Clip)' : 'e.g. Wait for the drop... 🔥'}" ${!isBannerOn ? 'disabled' : ''} oninput="updateChop(${idx}, 'hook_text', this.value)" onchange="updateChop(${idx}, 'hook_text', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 ${!isBannerOn ? 'opacity-40 cursor-not-allowed' : ''}">
+                        <div class="flex items-center gap-1.5">
+                            <input id="hookInput_${idx}" type="text" value="${chop.hook_text || ''}" placeholder="${!isBannerOn ? '(Banner Disabled for this Clip)' : 'e.g. Wait for the drop... 🔥'}" ${!isBannerOn ? 'disabled' : ''} oninput="updateChop(${idx}, 'hook_text', this.value)" onchange="updateChop(${idx}, 'hook_text', this.value)" class="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 ${!isBannerOn ? 'opacity-40 cursor-not-allowed' : ''}">
+                            <button type="button" onclick="aiGenerateHook(${idx})" title="AI Generate Hook Options" class="shrink-0 flex items-center gap-1 px-2 py-1.5 rounded-lg bg-violet-600/20 hover:bg-violet-600/40 border border-violet-500/30 text-violet-300 text-[10px] font-bold transition-colors ${!isBannerOn ? 'opacity-30 pointer-events-none' : ''}">
+                                🪄 AI
+                            </button>
+                        </div>
+                        <!-- AI Hook Variant Dropdown -->
+                        <div id="aiHookDropdown_${idx}" class="hidden mt-1.5 p-2 bg-zinc-950 border border-violet-500/30 rounded-xl space-y-1 shadow-xl">
+                            <p class="text-[9px] font-bold uppercase text-violet-400 px-1 pb-0.5">Pick a hook variant:</p>
+                            <div id="aiHookOptions_${idx}" class="space-y-1">
+                                <p class="text-[10px] text-zinc-500 px-1 py-2 text-center">Generating...</p>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Start Timestamp -->
@@ -1597,7 +1623,10 @@
             syncJson();
             saveDraft();
 
-            AppToast.success(`Loaded "${data.title}" (${durStr})! Set your chops below.`);
+            // ✨ Feature 4: Auto-generate AI content now that we have YT metadata
+            setTimeout(() => aiFillAllChops(true), 800);
+
+            AppToast.success(`Loaded "${data.title}" (${durStr})! AI is generating hooks & descriptions...`);
 
         } catch (err) {
             clearInterval(fakeProgress);
@@ -1724,5 +1753,200 @@
             AppToast.error('Submission Error: ' + err.message);
         }
     });
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🪄 AI CONTENT GENERATION HELPERS
+    // ═══════════════════════════════════════════════════════════════════════
+
+    const AI_GENERATE_URL = '{% url "ai_generate" %}';
+
+    function _aiGetCsrf() {
+        return document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || '';
+    }
+
+    function _aiGetContext() {
+        const meta = window._ytMeta || {};
+        return {
+            yt_title: meta.title || document.getElementById('projectTitle')?.value || '',
+            yt_description: meta.description || '',
+            yt_tags: meta.tags || [],
+        };
+    }
+
+    function _aiGetTone() {
+        return document.getElementById('aiToneSelect')?.value || 'viral';
+    }
+
+    /**
+     * Generate 3 hook variant options for a single chop and show them in a dropdown.
+     */
+    window.aiGenerateHook = async function(idx) {
+        const dropdown = document.getElementById(`aiHookDropdown_${idx}`);
+        const optionsContainer = document.getElementById(`aiHookOptions_${idx}`);
+        if (!dropdown || !optionsContainer) return;
+
+        // Toggle off if already open and populated
+        if (!dropdown.classList.contains('hidden') && optionsContainer.children.length > 1) {
+            dropdown.classList.add('hidden');
+            return;
+        }
+
+        dropdown.classList.remove('hidden');
+        optionsContainer.innerHTML = '<p class="text-[10px] text-zinc-500 px-1 py-2 text-center animate-pulse">Generating with Gemini AI...</p>';
+
+        const chop = chops[idx];
+        if (!chop) { dropdown.classList.add('hidden'); return; }
+
+        const ctx = _aiGetContext();
+
+        try {
+            const resp = await fetch(AI_GENERATE_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': _aiGetCsrf(),
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({
+                    content_type: 'short',
+                    tone: _aiGetTone(),
+                    context: {
+                        ...ctx,
+                        chop_start: chop.start_seconds,
+                        chop_end: chop.end_seconds,
+                        hook_text: chop.hook_text || '',
+                    }
+                })
+            });
+            const data = await resp.json();
+
+            if (!data.success) throw new Error(data.error || 'AI generation failed');
+
+            const hooks = data.data?.hook_options || [];
+            const titleVariants = data.data?.title_variants || [];
+            const description = data.data?.description || '';
+
+            // Store generated title/description on the chop for later use
+            if (titleVariants.length > 0) chop._aiTitles = titleVariants;
+            if (description) chop._aiDesc = description;
+
+            if (hooks.length === 0) {
+                optionsContainer.innerHTML = '<p class="text-[10px] text-red-400 px-1 py-1">No hooks returned. Try again.</p>';
+                return;
+            }
+
+            optionsContainer.innerHTML = hooks.map((hook, i) => `
+                <button type="button"
+                    onclick="applyAiHook(${idx}, ${JSON.stringify(hook)})"
+                    class="w-full text-left px-2.5 py-2 rounded-lg bg-zinc-900 hover:bg-violet-600/20 border border-zinc-800 hover:border-violet-500/40 text-[10px] text-zinc-200 transition-colors leading-snug">
+                    ${hook}
+                </button>
+            `).join('');
+
+            // Also show A/B title variants below hooks
+            if (titleVariants.length > 0) {
+                optionsContainer.innerHTML += `
+                    <p class="text-[9px] font-bold uppercase text-violet-400 px-1 pt-2 pb-0.5">Title Variants (A/B):</p>
+                    ${titleVariants.map(v => `
+                        <p class="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 leading-snug">
+                            <span class="text-violet-400 font-bold">${v.label}</span>: ${v.title}
+                        </p>
+                    `).join('')}
+                `;
+            }
+
+        } catch (err) {
+            optionsContainer.innerHTML = `<p class="text-[10px] text-red-400 px-1 py-1">Error: ${err.message}</p>`;
+        }
+    };
+
+    /**
+     * Apply a selected AI hook text to a chop input and update state.
+     */
+    window.applyAiHook = function(idx, hookText) {
+        updateChop(idx, 'hook_text', hookText);
+        const input = document.getElementById(`hookInput_${idx}`);
+        if (input) {
+            input.value = hookText;
+            input.dispatchEvent(new Event('input'));
+        }
+        const dropdown = document.getElementById(`aiHookDropdown_${idx}`);
+        if (dropdown) dropdown.classList.add('hidden');
+        AppToast.success('Hook text applied! ✨');
+    };
+
+    /**
+     * Batch-generate AI hooks for ALL chops.
+     * silent=true suppresses per-chop toast (used on auto-trigger after YT download).
+     */
+    window.aiFillAllChops = async function(silent = false) {
+        if (chops.length === 0) {
+            if (!silent) AppToast.warning('Add some chops first before generating AI content.');
+            return;
+        }
+
+        const btn = document.getElementById('aiFillAllBtn');
+        if (btn) { btn.disabled = true; btn.textContent = '🪄 Generating...'; }
+
+        const ctx = _aiGetContext();
+        const tone = _aiGetTone();
+        let filled = 0;
+
+        for (let idx = 0; idx < chops.length; idx++) {
+            const chop = chops[idx];
+            try {
+                const resp = await fetch(AI_GENERATE_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': _aiGetCsrf(),
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({
+                        content_type: 'short',
+                        tone,
+                        context: {
+                            ...ctx,
+                            chop_start: chop.start_seconds,
+                            chop_end: chop.end_seconds,
+                            hook_text: chop.hook_text || '',
+                        }
+                    })
+                });
+                const data = await resp.json();
+                if (!data.success) continue;
+
+                const hooks = data.data?.hook_options || [];
+                const titleVariants = data.data?.title_variants || [];
+                const description = data.data?.description || '';
+
+                // Apply first hook automatically
+                if (hooks.length > 0) {
+                    updateChop(idx, 'hook_text', hooks[0]);
+                    const input = document.getElementById(`hookInput_${idx}`);
+                    if (input) input.value = hooks[0];
+                    chop._aiHookOptions = hooks;
+                }
+
+                // Store A/B title variants and description on chop for future use
+                if (titleVariants.length > 0) chop._aiTitles = titleVariants;
+                if (description) chop._aiDesc = description;
+
+                filled++;
+            } catch (e) {
+                console.warn(`AI generation failed for chop ${idx}:`, e);
+            }
+        }
+
+        renderChopsList();
+        if (btn) { btn.disabled = false; btn.textContent = '🪄 AI Fill All'; }
+
+        if (!silent && filled > 0) {
+            AppToast.success(`AI filled ${filled} chop${filled !== 1 ? 's' : ''} with hooks & A/B titles! ✨`);
+        } else if (!silent) {
+            AppToast.warning('AI generation returned no results. Check your GEMINI_API_KEY.');
+        }
+    };
+
 </script>
 {% endblock %}

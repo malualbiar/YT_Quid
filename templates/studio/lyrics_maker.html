@@ -71,7 +71,12 @@
                         <!-- Title & Artist -->
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div class="space-y-1">
-                                <label class="text-[11px] font-bold text-zinc-300">Song / Video Title <span class="text-rose-400">*</span></label>
+                                <div class="flex items-center justify-between">
+                                    <label class="text-[11px] font-bold text-zinc-300">Song / Video Title <span class="text-rose-400">*</span></label>
+                                    <button type="button" onclick="aiGenerateLyricsMetadata()" title="Use AI to generate optimized title variants and description for YouTube" class="flex items-center gap-1 px-1.5 py-0.5 rounded border border-violet-500/30 bg-violet-600/20 hover:bg-violet-600/40 text-violet-300 text-[9px] font-bold transition-colors">
+                                        🪄 AI Gen
+                                    </button>
+                                </div>
                                 <input type="text" name="title" id="songTitleInput" required placeholder="e.g. Midnight Waves" 
                                        class="w-full px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600">
                             </div>
@@ -3896,5 +3901,66 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     })();
 });
+
+async function aiGenerateLyricsMetadata() {
+    const titleInput = document.getElementById('songTitleInput');
+    const artistInput = document.getElementById('artistNameInput');
+    
+    if (!titleInput.value) {
+        if (window.AppToast) AppToast.warning("Enter at least a basic song title first.");
+        return;
+    }
+
+    const prevTitle = titleInput.value;
+    titleInput.value = '✨ Generating with Gemini AI...';
+    
+    try {
+        const csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || '';
+        const resp = await fetch('/ai/generate/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                content_type: 'lyrics',
+                tone: 'chill',
+                context: {
+                    song_title: prevTitle,
+                    artist: artistInput ? artistInput.value : '',
+                }
+            })
+        });
+
+        const data = await resp.json();
+        if (data.success && data.data) {
+            const variants = data.data.title_variants || [];
+            if (variants.length > 0) {
+                const seoVariant = variants.find(v => v.label.includes('SEO'));
+                titleInput.value = seoVariant ? seoVariant.title : variants[0].title;
+            } else if (data.data.title) {
+                titleInput.value = data.data.title;
+            } else {
+                titleInput.value = prevTitle;
+            }
+            
+            if (data.data.description && window.AppToast) {
+                // Since LyricsMaker has no desc input, we store it in a global var 
+                // so it can be saved in Draft or picked up by Publishing modal.
+                window._aiLyricsDesc = data.data.description;
+                window._aiLyricsTags = data.data.tags || [];
+                AppToast.success('Metadata generated! Description saved in background.');
+            }
+        } else {
+            titleInput.value = prevTitle;
+            if (window.AppToast) AppToast.error("AI generation failed: " + (data.error || "Unknown error"));
+        }
+    } catch (err) {
+        titleInput.value = prevTitle;
+        console.error("AI Error:", err);
+        if (window.AppToast) AppToast.error("AI Error: " + err.message);
+    }
+}
 </script>
 {% endblock %}

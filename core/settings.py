@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'apps.radar.apps.RadarConfig',
     'apps.publishing.apps.PublishingConfig',
     'apps.downloader.apps.DownloaderConfig',
+    'apps.ai.apps.AiConfig',
 ]
 
 MIDDLEWARE = [
@@ -192,3 +193,6 @@ SYNC_INTERVAL_HOURS = int(os.getenv('SYNC_INTERVAL_HOURS', '6'))
 GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '')
 GOOGLE_OAUTH_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET', '')
 GOOGLE_OAUTH_REDIRECT_URI = os.getenv('GOOGLE_OAUTH_REDIRECT_URI', 'http://127.0.0.1:8000/publishing/oauth/callback/')
+
+# Gemini AI Content Generation
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
