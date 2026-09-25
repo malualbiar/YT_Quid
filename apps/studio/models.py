@@ -233,11 +233,22 @@ class ShortVideoProject(models.Model):
         choices=HookPosition.choices,
         default=HookPosition.TOP
     )
+    show_cta_badge = models.BooleanField(
+        default=True,
+        help_text='Show bottom "Full Video on YouTube" CTA pill'
+    )
 
     duration_seconds = models.FloatField(default=0.0)
     chop_count = models.IntegerField(default=0)
     chops_data = models.JSONField(default=list, blank=True)
     output_video = models.FileField(upload_to='studio/shorts_output/', blank=True, null=True)
+
+    # YouTube URL source metadata (populated when source is a YouTube URL via yt-dlp)
+    source_yt_url = models.URLField(max_length=500, blank=True, default='', help_text='Original YouTube URL if video was downloaded via yt-dlp')
+    yt_video_title = models.CharField(max_length=500, blank=True, default='', help_text='Title from the original YouTube video')
+    yt_video_description = models.TextField(blank=True, default='', help_text='Description from the original YouTube video')
+    yt_video_tags = models.JSONField(default=list, blank=True, help_text='Tags/keywords from the original YouTube video')
+    yt_channel_name = models.CharField(max_length=255, blank=True, default='', help_text='Channel name from the original YouTube video')
 
     render_status = models.CharField(
         max_length=20,
@@ -288,9 +299,11 @@ class ShortVideoProject(models.Model):
         chop = chops[chop_index] if chop_index < len(chops) else {}
         part_label = f"Part {chop_index + 1}"
         hook = chop.get('hook_text', '').strip()
+        # Use original YouTube video title if available, otherwise project title
+        base_title = self.yt_video_title.strip() if self.yt_video_title else self.title
         if hook:
-            return f"{self.title} ({part_label}) - {hook} 🔥 #shorts #fyp #viral"
-        return f"{self.title} - {part_label} 🔥 #shorts #trending #newvideo"
+            return f"{base_title} ({part_label}) - {hook} 🔥 #shorts #fyp #viral"
+        return f"{base_title} - {part_label} 🔥 #shorts #trending #newvideo"
 
     def youtube_description_for_chop(self, chop_index=0):
         chops = self.chops_data or []
@@ -299,14 +312,42 @@ class ShortVideoProject(models.Model):
         start_sec = chop.get('start_seconds', 0.0)
         end_sec = chop.get('end_seconds', 0.0)
         dur = round(end_sec - start_sec, 1)
+        base_title = self.yt_video_title.strip() if self.yt_video_title else self.title
 
-        return (
-            f"🔥 {self.title} - {part_label}\n\n"
-            f"Segment: {start_sec}s to {end_sec}s ({dur}s clip)\n"
-            f"Watch full version on our channel!\n\n"
-            f"👍 Like, Share & Subscribe for more daily shorts!\n\n"
-            f"#shorts #shortsvideo #reels #tiktok #viralvideo #trending #fyp"
-        )
+        # Build tags line from YouTube video tags if available
+        yt_tags = self.yt_video_tags or []
+        if yt_tags:
+            tags_line = ' '.join(f"#{t.strip().replace(' ', '')}" for t in yt_tags[:12] if t.strip())
+        else:
+            tags_line = '#shorts #shortsvideo #reels #tiktok #viralvideo #trending #fyp'
+
+        # Include original description snippet if available
+        original_desc = ''
+        if self.yt_video_description:
+            # Truncate to first 300 chars to keep description clean
+            original_desc = self.yt_video_description.strip()[:300]
+            if len(self.yt_video_description.strip()) > 300:
+                original_desc += '...'
+
+        channel_credit = f"📺 Original by {self.yt_channel_name}\n" if self.yt_channel_name else ''
+        source_url = f"🔗 Source: {self.source_yt_url}\n" if self.source_yt_url else ''
+
+        desc_parts = [f"🔥 {base_title} - {part_label}"]
+        desc_parts.append('')
+        if original_desc:
+            desc_parts.append(original_desc)
+            desc_parts.append('')
+        desc_parts.append(f"Segment: {start_sec}s to {end_sec}s ({dur}s clip)")
+        if channel_credit:
+            desc_parts.append(channel_credit.strip())
+        if source_url:
+            desc_parts.append(source_url.strip())
+        desc_parts.append('')
+        desc_parts.append('👍 Like, Share & Subscribe for more daily shorts!')
+        desc_parts.append('')
+        desc_parts.append(tags_line)
+
+        return '\n'.join(desc_parts)
 
 
 class LyricVideoProject(models.Model):

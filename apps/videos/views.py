@@ -1,5 +1,7 @@
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
+from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Q
 from .models import Video, VideoStatisticSnapshot
@@ -58,8 +60,8 @@ def video_list_view(request):
 
 @login_required
 def video_detail_view(request, pk):
+    video = get_object_or_404(Video.objects.filter(is_active=True).select_related('artist', 'channel'), pk=pk)
     AnalyticsService.update_video_growth_metrics(video_ids=[pk])
-    video = get_object_or_404(Video.objects.select_related('artist', 'channel'), pk=pk)
     
     range_days_param = request.GET.get('days', '30')
     if range_days_param == 'all':
@@ -86,3 +88,45 @@ def video_detail_view(request, pk):
         'milestones': milestones,
         'total_gained_in_period': total_gained_in_period,
     })
+
+
+@login_required
+def video_delete_view(request, pk):
+    """
+    Soft-delete a video from the catalog by setting is_active=False.
+    The record (and its snapshots / milestones) is kept in the DB but
+    is hidden from every catalog, analytics and reporting query.
+    Supports GET (confirmation page) and POST (action).
+    """
+    video = get_object_or_404(Video, pk=pk)
+
+    if not (request.user.can_manage_artists or request.user.is_staff or request.user.is_superuser):
+        messages.error(request, "You don't have permission to delete songs.")
+        return redirect('video_list')
+
+    if request.method == 'GET':
+        return render(request, 'videos/delete_confirm.html', {'video': video})
+
+    title = video.title
+    artist_id = video.artist_id
+    video.is_active = False
+    video.save(update_fields=['is_active'])
+
+    # Refresh cached metrics for the artist
+    try:
+        if artist_id:
+            AnalyticsService.update_video_growth_metrics(artist_id=artist_id)
+    except Exception:
+        pass
+
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        from django.http import JsonResponse
+        return JsonResponse({'success': True, 'message': f"'{title}' has been removed from the catalog."})
+
+    messages.success(request, f"'{title}' has been removed from the catalog.")
+    
+    # Return to referer if coming from catalog with filters, otherwise video_list
+    referer = request.META.get('HTTP_REFERER')
+    if referer and '/videos/' in referer and f'/videos/{pk}/' not in referer:
+        return redirect(referer)
+    return redirect('video_list')

@@ -21,6 +21,7 @@ urlpatterns = [
     path('studio/shorts/<int:pk>/delete/', views.shorts_delete_view, name='shorts_delete'),
     path('studio/shorts/<int:pk>/export-zip/', views.shorts_export_zip_view, name='shorts_export_zip'),
     path('studio/shorts/<int:pk>/download/<int:chop_idx>/', views.shorts_download_chop_view, name='shorts_download_chop'),
+    path('studio/shorts/yt-download/', views.shorts_yt_download_view, name='shorts_yt_download'),
 
     # AI & Tap-to-Sync Lyrics Video Generator routes
     path('studio/lyrics/', views.lyrics_maker_view, name='lyrics_maker'),

@@ -534,7 +534,7 @@ def shorts_maker_view(request):
     })
 
 
-def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_focal_percent, source_type, hook_position='TOP'):
+def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_focal_percent, source_type, hook_position='TOP', show_cta_badge=True):
     from django.db import connections
     connections.close_all()
     try:
@@ -587,13 +587,22 @@ def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_foc
             out_path = os.path.join(project_output_dir, out_filename)
             overlay_png = os.path.join(project_output_dir, f"overlay_part{chop_id}.png")
 
-            # Generate overlay if needed
-            if theme_style != ShortVideoProject.ThemeStyle.CLEAN or hook_text:
+            # Generate overlay if needed — respect per-chop show_hook_banner and show_cta_badge flags
+            show_hook_banner = chop.get('show_hook_banner', True)
+            chop_show_cta = chop.get('show_cta_badge', getattr(project, 'show_cta_badge', show_cta_badge))
+
+            needs_hook = show_hook_banner and (theme_style != ShortVideoProject.ThemeStyle.CLEAN or bool(hook_text))
+            needs_cta = bool(chop_show_cta)
+
+            if needs_hook or needs_cta:
+                banner_text_arg = hook_text if show_hook_banner else ""
+                part_label_arg = f"Part {chop_id}" if show_hook_banner else ""
                 ShortsEngineService.prepare_overlay_banner(
-                    hook_text=hook_text,
-                    part_label=f"Part {chop_id}",
+                    hook_text=banner_text_arg,
+                    part_label=part_label_arg,
                     theme=theme_style,
                     hook_position=chop_hook_pos,
+                    show_cta_badge=needs_cta,
                     width=1080,
                     height=1920,
                     output_png_path=overlay_png
@@ -720,16 +729,34 @@ def shorts_render_view(request):
     crop_focal_percent = int(request.POST.get('crop_focal_percent', 50))
     theme_style = request.POST.get('theme_style', ShortVideoProject.ThemeStyle.VIRAL_HOOK)
     hook_position = request.POST.get('hook_position', ShortVideoProject.HookPosition.TOP)
+    show_cta_badge = request.POST.get('show_cta_badge') in ['1', 'true', 'True', 'on'] if 'show_cta_badge' in request.POST else True
+
+    # YouTube URL metadata (from yt-dlp download)
+    source_yt_url = request.POST.get('source_yt_url', '').strip()
+    yt_video_title = request.POST.get('yt_video_title', '').strip()
+    yt_video_description = request.POST.get('yt_video_description', '').strip()
+    yt_video_tags_raw = request.POST.get('yt_video_tags', '').strip()
+    yt_channel_name = request.POST.get('yt_channel_name', '').strip()
+    yt_downloaded_path = request.POST.get('yt_downloaded_path', '').strip()
+
+    try:
+        yt_video_tags = json.loads(yt_video_tags_raw) if yt_video_tags_raw else []
+    except Exception:
+        yt_video_tags = []
 
     source_video = request.FILES.get('source_video')
     audio_file = request.FILES.get('audio_file')
     cover_image = request.FILES.get('cover_image')
     chops_json = request.POST.get('chops_json', '').strip()
 
-    if source_type == ShortVideoProject.SourceType.VIDEO and not source_video:
+    # If YouTube video was downloaded locally, treat as VIDEO source
+    if yt_downloaded_path and os.path.exists(yt_downloaded_path) and not source_video:
+        source_type = ShortVideoProject.SourceType.VIDEO
+
+    if source_type == ShortVideoProject.SourceType.VIDEO and not source_video and not (yt_downloaded_path and os.path.exists(yt_downloaded_path)):
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            return JsonResponse({'error': 'Please upload a video file (.mp4, .mov, .mkv).'}, status=400)
-        messages.error(request, "Please upload a video file (.mp4, .mov, .mkv).")
+            return JsonResponse({'error': 'Please upload a video file (.mp4, .mov, .mkv) or download from YouTube.'}, status=400)
+        messages.error(request, "Please upload a video file (.mp4, .mov, .mkv) or download from YouTube.")
         return redirect('shorts_maker')
 
     if source_type == ShortVideoProject.SourceType.AUDIO_COVER and (not audio_file or not cover_image):
@@ -759,9 +786,21 @@ def shorts_render_view(request):
         crop_focal_percent=crop_focal_percent,
         theme_style=theme_style,
         hook_position=hook_position,
+        show_cta_badge=show_cta_badge,
         chops_data=chops,
+        source_yt_url=source_yt_url,
+        yt_video_title=yt_video_title,
+        yt_video_description=yt_video_description,
+        yt_video_tags=yt_video_tags,
+        yt_channel_name=yt_channel_name,
         render_status=ShortVideoProject.Status.RENDERING
     )
+
+    # Attach downloaded YouTube video if source_video was not an uploaded file
+    if yt_downloaded_path and os.path.exists(yt_downloaded_path) and not source_video:
+        from django.core.files import File as DjangoFile
+        with open(yt_downloaded_path, 'rb') as f_yt:
+            project.source_video.save(os.path.basename(yt_downloaded_path), DjangoFile(f_yt), save=True)
 
     is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or request.POST.get('async') == '1'
 
@@ -769,7 +808,7 @@ def shorts_render_view(request):
         # Launch render in daemon worker thread
         thread = threading.Thread(
             target=_execute_shorts_render,
-            args=(project.id, chops, aspect_mode, theme_style, crop_focal_percent, source_type, hook_position),
+            args=(project.id, chops, aspect_mode, theme_style, crop_focal_percent, source_type, hook_position, show_cta_badge),
             daemon=True
         )
         thread.start()
@@ -783,7 +822,7 @@ def shorts_render_view(request):
         })
 
     # Synchronous execution fallback for direct POST
-    _execute_shorts_render(project.id, chops, aspect_mode, theme_style, crop_focal_percent, source_type, hook_position)
+    _execute_shorts_render(project.id, chops, aspect_mode, theme_style, crop_focal_percent, source_type, hook_position, show_cta_badge)
     project.refresh_from_db()
     if project.render_status == ShortVideoProject.Status.COMPLETED:
         messages.success(request, f"Successfully created {project.chop_count} vertical 9:16 shorts for '{project.title}'!")
@@ -874,6 +913,52 @@ def shorts_export_zip_view(request, pk):
     response = HttpResponse(zip_buffer.read(), content_type='application/zip')
     response['Content-Disposition'] = f'attachment; filename="{safe_title}_Shorts_Package.zip"'
     return response
+
+
+@login_required
+@require_POST
+def shorts_yt_download_view(request):
+    """
+    AJAX endpoint: accepts a YouTube URL, downloads best-quality video via yt-dlp,
+    stores it in media/studio/yt_downloads/, and returns the local file path + metadata.
+    Used by the Shorts Maker frontend to enable YouTube-URL-sourced chopping.
+    """
+    if not request.user.is_super_admin:
+        return JsonResponse({'error': 'Super Admin privileges required.'}, status=403)
+
+    yt_url = request.POST.get('yt_url', '').strip()
+    if not yt_url:
+        return JsonResponse({'error': 'No YouTube URL provided.'}, status=400)
+
+    if 'youtube.com' not in yt_url and 'youtu.be' not in yt_url:
+        return JsonResponse({'error': 'Please provide a valid YouTube URL.'}, status=400)
+
+    download_dir = os.path.join(settings.MEDIA_ROOT, 'studio', 'yt_downloads')
+    os.makedirs(download_dir, exist_ok=True)
+
+    try:
+        result = ShortsEngineService.download_youtube_video(yt_url, download_dir)
+        return JsonResponse({
+            'success': True,
+            'path': result['path'],
+            'title': result['title'],
+            'description': result['description'],
+            'tags': result['tags'],
+            'channel_name': result['channel_name'],
+            'duration': result['duration'],
+            'video_id': result['video_id'],
+        })
+    except Exception as e:
+        return JsonResponse({'error': f'Download failed: {str(e)}'}, status=500)
+
+
+@login_required
+def shorts_yt_download_status_view(request, task_id):
+    """
+    Placeholder polling endpoint for yt-dlp download progress (returns simple status).
+    The actual download is synchronous in shorts_yt_download_view.
+    """
+    return JsonResponse({'status': 'done', 'task_id': task_id})
 
 
 # ==========================================

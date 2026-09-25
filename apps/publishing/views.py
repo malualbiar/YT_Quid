@@ -219,9 +219,12 @@ def create_job_view(request):
     account_id = request.POST.get('account_id')
     account = None
     if account_id:
-        account = YouTubeOAuthAccount.objects.filter(pk=account_id).first()
+        account = YouTubeOAuthAccount.objects.filter(pk=account_id, is_active=True).first()
     if not account:
-        account = YouTubeOAuthAccount.objects.filter(is_default=True).first() or YouTubeOAuthAccount.objects.first()
+        account = (
+            YouTubeOAuthAccount.objects.filter(is_default=True, is_active=True).first()
+            or YouTubeOAuthAccount.objects.filter(is_active=True).first()
+        )
 
     if upload_engine == PublishingJob.UploadEngine.API_V3 and not account:
         err_msg = "No YouTube channel is connected for API v3. Please connect a channel or switch to Browser Automation / Studio Assistant mode."
@@ -332,9 +335,12 @@ def batch_queue_shorts_view(request, project_id):
     project = get_object_or_404(ShortVideoProject, pk=project_id)
     is_ajax = request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', '')
 
-    account = YouTubeOAuthAccount.objects.filter(is_default=True).first() or YouTubeOAuthAccount.objects.first()
+    account = (
+        YouTubeOAuthAccount.objects.filter(is_default=True, is_active=True).first()
+        or YouTubeOAuthAccount.objects.filter(is_active=True).first()
+    )
     if not account:
-        err_msg = "No YouTube channel connected. Please connect a channel first in YouTube Publisher."
+        err_msg = "No active YouTube channel connected. Please connect a channel first in YouTube Publisher."
         if is_ajax:
             return JsonResponse({'success': False, 'error': err_msg}, status=400)
         messages.error(request, err_msg)
@@ -371,11 +377,15 @@ def batch_queue_shorts_view(request, project_id):
 
         thumbnail_path = project.cover_image.path if project.cover_image else ''
 
+        chop_tags = list(project.yt_video_tags[:15]) if project.yt_video_tags else ['shorts', 'viral', 'reels', 'music', 'fyp']
+        if 'shorts' not in [t.lower() for t in chop_tags]:
+            chop_tags.insert(0, 'shorts')
+
         job = PublishingJob.objects.create(
             account=account,
             title=chop_title,
             description=chop_desc,
-            tags=['shorts', 'viral', 'reels', 'music', 'fyp'],
+            tags=chop_tags,
             category_id='10',
             privacy_status=current_privacy,
             publish_at=publish_at,
@@ -389,9 +399,9 @@ def batch_queue_shorts_view(request, project_id):
         )
         queued_jobs.append(job)
 
-    # Launch first job upload
-    if queued_jobs:
-        YouTubeUploaderService.start_upload_async(queued_jobs[0].id)
+    # Launch ALL queued jobs async (each uploads sequentially in its own thread)
+    for job in queued_jobs:
+        YouTubeUploaderService.start_upload_async(job.id)
 
     msg = f"Successfully queued {len(queued_jobs)} Shorts/Chops to '{account.channel_title}'!"
     if is_ajax:

@@ -33,6 +33,13 @@
     <form method="POST" action="{% url 'shorts_render' %}" enctype="multipart/form-data" id="shortsForm">
         {% csrf_token %}
         <input type="hidden" name="chops_json" id="chopsJsonInput" value="[]">
+        <!-- YouTube URL metadata fields populated after yt-dlp download -->
+        <input type="hidden" name="source_yt_url" id="hiddenYtUrl" value="">
+        <input type="hidden" name="yt_video_title" id="hiddenYtTitle" value="">
+        <input type="hidden" name="yt_video_description" id="hiddenYtDesc" value="">
+        <input type="hidden" name="yt_video_tags" id="hiddenYtTags" value="">
+        <input type="hidden" name="yt_channel_name" id="hiddenYtChannel" value="">
+        <input type="hidden" name="yt_downloaded_path" id="hiddenYtPath" value="">
 
         <!-- 2-Column Split Layout Container -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -57,6 +64,13 @@
                             <label class="px-3 py-1 rounded-lg font-medium cursor-pointer transition-colors text-zinc-400 hover:text-zinc-200 source-tab" data-source="AUDIO_COVER">
                                 <input type="radio" name="source_type" value="AUDIO_COVER" class="hidden">
                                 Audio + Cover Art
+                            </label>
+                            <label class="px-3 py-1 rounded-lg font-medium cursor-pointer transition-colors text-zinc-400 hover:text-zinc-200 source-tab" data-source="YT_URL">
+                                <input type="radio" name="source_type" value="VIDEO" class="hidden">
+                                <span class="flex items-center gap-1.5">
+                                    <i data-lucide="youtube" class="w-3.5 h-3.5 text-rose-500 inline"></i>
+                                    YouTube URL
+                                </span>
                             </label>
                         </div>
                     </div>
@@ -84,6 +98,53 @@
                                         Replace Video
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- YouTube URL Download Container (Fix 5 & Fix 6) -->
+                    <div id="ytUrlSourceContainer" class="hidden space-y-4">
+                        <div class="p-5 rounded-2xl border border-zinc-800 bg-zinc-950 space-y-4">
+                            <div class="space-y-2">
+                                <label class="text-xs font-bold text-zinc-300 flex items-center gap-1.5">
+                                    <i data-lucide="link" class="w-3.5 h-3.5 text-rose-400"></i>
+                                    YouTube Long Video URL
+                                </label>
+                                <div class="flex items-center gap-2">
+                                    <input type="url" id="ytUrlInput" placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..." class="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-rose-500/50 text-xs">
+                                    <button type="button" id="ytDownloadBtn" onclick="startYtDownload()" class="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shrink-0">
+                                        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                                        <span>Download & Load</span>
+                                    </button>
+                                </div>
+                                <p class="text-[11px] text-zinc-400">System uses <span class="font-mono text-zinc-300">yt-dlp</span> &amp; <span class="font-mono text-zinc-300">ffmpeg</span> to fetch the highest quality video, title, description, and tags.</p>
+                            </div>
+
+                            <!-- Download Progress Status -->
+                            <div id="ytDownloadProgress" class="hidden p-3 bg-zinc-900 rounded-xl border border-zinc-800 space-y-2">
+                                <div class="flex items-center justify-between text-xs">
+                                    <div class="flex items-center gap-2 text-zinc-300">
+                                        <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse"></span>
+                                        <span id="ytDownloadStatusText">Fetching video details & downloading stream...</span>
+                                    </div>
+                                    <span id="ytDownloadPercent" class="text-xs font-mono font-bold text-rose-400">0%</span>
+                                </div>
+                                <div class="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                                    <div id="ytDownloadBar" class="h-full bg-rose-500 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                </div>
+                            </div>
+
+                            <!-- Downloaded Video Info Card -->
+                            <div id="ytDownloadedInfo" class="hidden p-4 bg-zinc-900 rounded-xl border border-emerald-500/40 space-y-2">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                        <p class="text-xs font-bold text-white truncate max-w-md" id="ytDownloadedTitle">Video Downloaded</p>
+                                    </div>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">Ready for Chopping</span>
+                                </div>
+                                <p class="text-[11px] text-zinc-400" id="ytDownloadedMeta"></p>
+                                <div id="ytFetchedTagsPreview" class="text-[10px] text-zinc-400 font-mono break-words bg-zinc-950 p-2 rounded-lg border border-zinc-800/80 hidden"></div>
                             </div>
                         </div>
                     </div>
@@ -346,6 +407,28 @@
                                     </label>
                                 </div>
                             </div>
+
+                            <!-- Bottom CTA Pill Toggle ("▶ Full Video on YouTube") -->
+                            <div class="space-y-2 pt-3 border-t border-zinc-800/80">
+                                <div class="flex items-center justify-between p-3 rounded-xl border border-zinc-800 bg-zinc-950 hover:border-zinc-700 transition-colors">
+                                    <div class="flex items-center gap-2.5">
+                                        <div class="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-300 shrink-0">
+                                            <i data-lucide="play" class="w-3.5 h-3.5 text-rose-500 fill-rose-500"></i>
+                                        </div>
+                                        <div>
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-xs font-bold text-white">"Full Video on YouTube" Pill</span>
+                                                <span id="ctaPillStatusBadge" class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase font-mono">ON</span>
+                                            </div>
+                                            <p class="text-[10px] text-zinc-400">Display watermarked YouTube badge at the bottom of rendered shorts.</p>
+                                        </div>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                                        <input type="checkbox" name="show_cta_badge" id="showCtaBadgeInput" value="1" checked onchange="toggleCtaPill(this.checked)" class="sr-only peer">
+                                        <div class="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                                    </label>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -553,6 +636,7 @@
             const themeRadio = document.querySelector('input[name="theme_style"]:checked');
             const hookPosRadio = document.querySelector('input[name="hook_position"]:checked');
             const sourceTab = document.querySelector('.source-tab.bg-zinc-800');
+            const ctaInput = document.getElementById('showCtaBadgeInput');
 
             const draftData = {
                 timestamp: Date.now(),
@@ -562,7 +646,8 @@
                 aspect_mode: aspectRadio ? aspectRadio.value : 'BLURRED_FIT',
                 theme_style: themeRadio ? themeRadio.value : 'VIRAL_HOOK',
                 hook_position: hookPosRadio ? hookPosRadio.value : 'TOP',
-                crop_focal_percent: cropFocalPercentInput ? cropFocalPercentInput.value : 50
+                crop_focal_percent: cropFocalPercentInput ? cropFocalPercentInput.value : 50,
+                show_cta_badge: ctaInput ? ctaInput.checked : true
             };
             localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
 
@@ -575,6 +660,27 @@
             console.warn('Draft save error:', e);
         }
     }
+
+    window.toggleCtaPill = function(isChecked) {
+        const mockupCta = document.getElementById('mockupCtaPill');
+        const badge = document.getElementById('ctaPillStatusBadge');
+        if (mockupCta) {
+            if (isChecked) {
+                mockupCta.classList.remove('hidden');
+            } else {
+                mockupCta.classList.add('hidden');
+            }
+        }
+        if (badge) {
+            badge.textContent = isChecked ? 'ON' : 'OFF';
+            badge.className = isChecked
+                ? 'text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase font-mono'
+                : 'text-[9px] font-bold px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-500 border border-zinc-700/50 uppercase font-mono';
+        }
+        chopsData.forEach(c => c.show_cta_badge = isChecked);
+        syncJson();
+        saveDraft();
+    };
 
     function loadDraft() {
         try {
@@ -647,6 +753,14 @@
                 }
             }
 
+            if (draft.show_cta_badge !== undefined) {
+                const ctaInput = document.getElementById('showCtaBadgeInput');
+                if (ctaInput) {
+                    ctaInput.checked = Boolean(draft.show_cta_badge);
+                    toggleCtaPill(ctaInput.checked);
+                }
+            }
+
             renderAll();
             if (draftStatusBanner) {
                 draftStatusBanner.classList.remove('hidden');
@@ -686,11 +800,15 @@
             tab.className = "px-3 py-1 rounded-lg font-medium cursor-pointer transition-colors bg-zinc-800 text-white source-tab";
 
             const mode = tab.getAttribute('data-source');
+            document.getElementById('videoSourceContainer').classList.add('hidden');
+            document.getElementById('audioSourceContainer').classList.add('hidden');
+            document.getElementById('ytUrlSourceContainer').classList.add('hidden');
+
             if (mode === 'VIDEO') {
                 document.getElementById('videoSourceContainer').classList.remove('hidden');
-                document.getElementById('audioSourceContainer').classList.add('hidden');
+            } else if (mode === 'YT_URL') {
+                document.getElementById('ytUrlSourceContainer').classList.remove('hidden');
             } else {
-                document.getElementById('videoSourceContainer').classList.add('hidden');
                 document.getElementById('audioSourceContainer').classList.remove('hidden');
             }
             saveDraft();
@@ -964,7 +1082,7 @@
         }
 
         renderTimelineSegments();
-        if (field === 'hook_position') {
+        if (field === 'hook_position' || field === 'show_hook_banner') {
             renderChopsList();
         }
         updateMockupPreview(idx);
@@ -1061,7 +1179,7 @@
             posClasses += "top-7";
         }
 
-        if (themeStyle === 'CLEAN') {
+        if (themeStyle === 'CLEAN' || (chop && chop.show_hook_banner === false)) {
             mockupHookPill.classList.add('hidden');
         } else {
             mockupHookPill.classList.remove('hidden');
@@ -1074,6 +1192,17 @@
             } else { // VIRAL_HOOK
                 mockupHookPill.className = `z-10 w-full max-w-[170px] bg-zinc-950/90 border border-rose-600/80 rounded-lg p-1.5 text-center shadow-lg transition-all duration-300 ${posClasses}`;
                 mockupHookText.className = "text-[8.5px] font-bold text-white leading-tight truncate";
+            }
+        }
+
+        // Toggle "Full Video on YouTube" CTA Pill in mockup
+        const ctaCheck = document.getElementById('showCtaBadgeInput');
+        const isCtaOn = ctaCheck ? ctaCheck.checked : true;
+        if (mockupCtaPill) {
+            if (isCtaOn && (chop ? chop.show_cta_badge !== false : true)) {
+                mockupCtaPill.classList.remove('hidden');
+            } else {
+                mockupCtaPill.classList.add('hidden');
             }
         }
 
@@ -1146,6 +1275,7 @@
             card.className = `p-4 rounded-xl border ${isPlaying ? 'border-zinc-600 bg-zinc-800/40' : 'border-zinc-800 bg-zinc-950 hover:border-zinc-700'} transition-all space-y-3`;
 
             const curPos = chop.hook_position || 'TOP';
+            const isBannerOn = chop.show_hook_banner !== false;
 
             card.innerHTML = `
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -1153,7 +1283,7 @@
                         <span class="w-6 h-6 rounded-lg ${isPlaying ? 'bg-zinc-700 text-white' : 'bg-zinc-800 text-zinc-300'} font-bold text-xs flex items-center justify-center">
                             ${chop.id}
                         </span>
-                        <input type="text" value="${chop.title}" onchange="updateChop(${idx}, 'title', this.value)" class="bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs font-bold text-white w-28 focus:outline-none focus:border-zinc-600">
+                        <input type="text" value="${chop.title}" oninput="updateChop(${idx}, 'title', this.value)" onchange="updateChop(${idx}, 'title', this.value)" class="bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs font-bold text-white w-28 focus:outline-none focus:border-zinc-600">
                         <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-zinc-900 text-zinc-300 border border-zinc-800">
                             ${chop.duration}s
                         </span>
@@ -1171,18 +1301,24 @@
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-12 gap-3 pt-1">
-                    <!-- Hook Text Banner Input & Position -->
+                    <!-- Hook Text Banner Input & Position & Toggle -->
                     <div class="md:col-span-6 space-y-1">
                         <div class="flex items-center justify-between">
-                            <label class="text-[10px] font-bold uppercase text-zinc-500">Viral Hook Banner Text</label>
-                            <div class="flex items-center gap-1 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800 text-[10px]">
+                            <div class="flex items-center gap-2">
+                                <label class="text-[10px] font-bold uppercase text-zinc-500">Hook Banner</label>
+                                <label class="flex items-center gap-1 cursor-pointer" title="Toggle viral hook banner for this chop">
+                                    <input type="checkbox" ${isBannerOn ? 'checked' : ''} onchange="updateChop(${idx}, 'show_hook_banner', this.checked)" class="accent-emerald-500 w-3 h-3 rounded">
+                                    <span class="text-[10px] ${isBannerOn ? 'text-emerald-400' : 'text-zinc-500'} font-semibold">${isBannerOn ? 'ON' : 'OFF'}</span>
+                                </label>
+                            </div>
+                            <div class="flex items-center gap-1 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800 text-[10px] ${!isBannerOn ? 'opacity-30 pointer-events-none' : ''}">
                                 <span class="text-zinc-500 text-[9px] font-mono">Pos:</span>
                                 <button type="button" onclick="updateChop(${idx}, 'hook_position', 'TOP')" class="px-1.5 py-0.5 rounded font-semibold transition-colors ${curPos === 'TOP' ? 'bg-emerald-500 text-zinc-950' : 'text-zinc-400 hover:text-zinc-200'}">Top</button>
                                 <button type="button" onclick="updateChop(${idx}, 'hook_position', 'CENTER')" class="px-1.5 py-0.5 rounded font-semibold transition-colors ${curPos === 'CENTER' ? 'bg-emerald-500 text-zinc-950' : 'text-zinc-400 hover:text-zinc-200'}">Mid</button>
                                 <button type="button" onclick="updateChop(${idx}, 'hook_position', 'BOTTOM')" class="px-1.5 py-0.5 rounded font-semibold transition-colors ${curPos === 'BOTTOM' ? 'bg-emerald-500 text-zinc-950' : 'text-zinc-400 hover:text-zinc-200'}">Bot</button>
                             </div>
                         </div>
-                        <input type="text" value="${chop.hook_text || ''}" placeholder="e.g. Wait for the drop... 🔥" onchange="updateChop(${idx}, 'hook_text', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600">
+                        <input type="text" value="${chop.hook_text || ''}" placeholder="${!isBannerOn ? '(Banner Disabled for this Clip)' : 'e.g. Wait for the drop... 🔥'}" ${!isBannerOn ? 'disabled' : ''} oninput="updateChop(${idx}, 'hook_text', this.value)" onchange="updateChop(${idx}, 'hook_text', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 ${!isBannerOn ? 'opacity-40 cursor-not-allowed' : ''}">
                     </div>
 
                     <!-- Start Timestamp -->
@@ -1212,6 +1348,21 @@
     }
 
     function syncJson() {
+        // Sync YouTube metadata hidden fields if a YT download was performed
+        if (window._ytMeta) {
+            const hUrl = document.getElementById('hiddenYtUrl');
+            const hTitle = document.getElementById('hiddenYtTitle');
+            const hDesc = document.getElementById('hiddenYtDesc');
+            const hTags = document.getElementById('hiddenYtTags');
+            const hChan = document.getElementById('hiddenYtChannel');
+            const hPath = document.getElementById('hiddenYtPath');
+            if (hUrl) hUrl.value = window._ytMeta.source_yt_url || '';
+            if (hTitle) hTitle.value = window._ytMeta.title || '';
+            if (hDesc) hDesc.value = window._ytMeta.description || '';
+            if (hTags) hTags.value = JSON.stringify(window._ytMeta.tags || []);
+            if (hChan) hChan.value = window._ytMeta.channel_name || '';
+            if (hPath) hPath.value = window._ytMeta.path || '';
+        }
         chopsJsonInput.value = JSON.stringify(chopsData);
     }
 
@@ -1326,6 +1477,140 @@
     // Load draft if saved
     loadDraft();
 
+    // YouTube URL Download Handler (Fix 5 & Fix 6)
+    window.startYtDownload = async function() {
+        const urlInput = document.getElementById('ytUrlInput');
+        const url = (urlInput ? urlInput.value : '').trim();
+        if (!url) {
+            AppToast.warning("Please enter a valid YouTube video URL.");
+            return;
+        }
+
+        const downloadBtn = document.getElementById('ytDownloadBtn');
+        const progressBox = document.getElementById('ytDownloadProgress');
+        const statusText = document.getElementById('ytDownloadStatusText');
+        const progressBar = document.getElementById('ytDownloadBar');
+        const percentText = document.getElementById('ytDownloadPercent');
+        const infoCard = document.getElementById('ytDownloadedInfo');
+        const titleEl = document.getElementById('ytDownloadedTitle');
+        const metaEl = document.getElementById('ytDownloadedMeta');
+        const tagsPreview = document.getElementById('ytFetchedTagsPreview');
+
+        downloadBtn.disabled = true;
+        downloadBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        progressBox.classList.remove('hidden');
+        infoCard.classList.add('hidden');
+        progressBar.style.width = '15%';
+        percentText.textContent = '15%';
+        statusText.textContent = 'Contacting YouTube via yt-dlp & analyzing streams...';
+
+        let fakePct = 15;
+        const fakeProgress = setInterval(() => {
+            if (fakePct < 85) {
+                fakePct += Math.floor(Math.random() * 8) + 3;
+                if (fakePct > 85) fakePct = 85;
+                progressBar.style.width = fakePct + '%';
+                percentText.textContent = fakePct + '%';
+                if (fakePct > 40 && fakePct < 70) {
+                    statusText.textContent = 'Downloading highest quality video & audio stream...';
+                } else if (fakePct >= 70) {
+                    statusText.textContent = 'Merging video + audio into MP4 with FFmpeg...';
+                }
+            }
+        }, 800);
+
+        try {
+            const csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || '';
+            const formData = new FormData();
+            formData.append('yt_url', url);
+
+            const resp = await fetch('{% url "shorts_yt_download" %}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: formData
+            });
+
+            clearInterval(fakeProgress);
+            const data = await resp.json();
+
+            if (!resp.ok || !data.success) {
+                throw new Error(data.error || 'Failed to download YouTube video.');
+            }
+
+            progressBar.style.width = '100%';
+            percentText.textContent = '100%';
+            statusText.textContent = 'Download & stream merge complete!';
+
+            // Store downloaded metadata in memory for syncJson
+            window._ytMeta = {
+                path: data.path,
+                title: data.title,
+                description: data.description,
+                tags: data.tags || [],
+                channel_name: data.channel_name || '',
+                source_yt_url: url
+            };
+
+            // Pre-fill project title if empty or default
+            if (!projectTitle.value || projectTitle.value === 'My Viral Shorts') {
+                projectTitle.value = data.title;
+            }
+
+            // Display info card
+            titleEl.textContent = data.title || 'YouTube Video';
+            const dur = Math.round(data.duration || 0);
+            const mins = Math.floor(dur / 60);
+            const secs = dur % 60;
+            const durStr = `${mins}:${String(secs).padStart(2, '0')}`;
+            metaEl.textContent = `${durStr} duration • Channel: ${data.channel_name || 'YouTube'} • Best MP4`;
+
+            if (data.tags && data.tags.length > 0) {
+                tagsPreview.textContent = 'Tags: ' + data.tags.slice(0, 10).map(t => '#' + t).join(' ');
+                tagsPreview.classList.remove('hidden');
+            } else {
+                tagsPreview.classList.add('hidden');
+            }
+
+            infoCard.classList.remove('hidden');
+
+            // Wire player preview to the downloaded media file
+            totalMediaDuration = data.duration || 60.0;
+            timelineEndLabel.textContent = formatTime(totalMediaDuration);
+
+            // Extract relative filename from absolute path
+            const filename = data.path.split(/[\\/]/).pop();
+            const mediaUrl = `/media/studio/yt_downloads/${encodeURIComponent(filename)}`;
+
+            sourceVideoPlayer.src = mediaUrl;
+            sourceVideoPlayer.classList.remove('hidden');
+            sourceAudioPlayer.classList.add('hidden');
+            playerPlaceholder.classList.add('hidden');
+
+            mockupVideoPreview.src = mediaUrl;
+            mockupVideoPreview.classList.remove('hidden');
+            document.getElementById('mockupCenterContent').classList.add('hidden');
+
+            autoSplitChops(15);
+            syncJson();
+            saveDraft();
+
+            AppToast.success(`Loaded "${data.title}" (${durStr})! Set your chops below.`);
+
+        } catch (err) {
+            clearInterval(fakeProgress);
+            progressBar.style.width = '0%';
+            percentText.textContent = '0%';
+            statusText.textContent = 'Download failed.';
+            AppToast.error('YouTube download notice: ' + err.message);
+        } finally {
+            downloadBtn.disabled = false;
+            downloadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+    };
+
     // Progress Modal & Dynamic Form Submission Logic
     const shortsForm = document.getElementById('shortsForm');
     const progressModal = document.getElementById('progressModal');
@@ -1338,10 +1623,23 @@
         e.preventDefault();
         syncJson();
 
-        // Validate that user provided video or audio
-        const isVideo = document.querySelector('input[name="source_type"]:checked')?.value === 'VIDEO';
+        // Validate source input
+        const activeSourceTab = document.querySelector('.source-tab.bg-zinc-800');
+        const activeSourceMode = activeSourceTab ? activeSourceTab.getAttribute('data-source') : 'VIDEO';
+        const isVideo = activeSourceMode === 'VIDEO';
+        const isYtUrl = activeSourceMode === 'YT_URL';
+        const isAudio = activeSourceMode === 'AUDIO_COVER';
+
         if (isVideo && (!videoInput.files || !videoInput.files[0])) {
             AppToast.warning("Please select or upload a video file.");
+            return;
+        }
+        if (isYtUrl && (!window._ytMeta || !window._ytMeta.path)) {
+            AppToast.warning("Please enter a YouTube URL and click 'Download & Load' first.");
+            return;
+        }
+        if (isAudio && (!audioInput.files || !audioInput.files[0])) {
+            AppToast.warning("Please select an audio file.");
             return;
         }
 

@@ -94,7 +94,7 @@ def global_search_view(request):
 
     artists = Artist.objects.filter(stage_name__icontains=q)[:5]
     channels = YouTubeChannel.objects.filter(channel_name__icontains=q)[:5]
-    videos = Video.objects.filter(title__icontains=q).select_related('artist')[:8]
+    videos = Video.objects.filter(title__icontains=q, is_active=True).select_related('artist')[:8]
 
     artists_data = [{
         'id': a.id,

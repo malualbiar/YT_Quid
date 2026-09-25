@@ -24,14 +24,10 @@
         </div>
 
         <div class="flex items-center gap-2 flex-wrap">
-            <form method="POST" action="{% url 'publishing_batch_shorts' project.id %}" data-confirm="Queue all {{ project.chop_count }} chops to YouTube drafts?">
-                {% csrf_token %}
-                <input type="hidden" name="privacy_status" value="private">
-                <button type="submit" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded-xl transition-colors flex items-center gap-2">
-                    <i data-lucide="upload" class="w-4 h-4"></i>
-                    <span>Queue All Chops to YouTube</span>
-                </button>
-            </form>
+            <button type="button" onclick="openBatchPublishModal()" class="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded-xl transition-colors flex items-center gap-2">
+                <i data-lucide="upload" class="w-4 h-4"></i>
+                <span>Publish All to YouTube ({{ project.chop_count }})</span>
+            </button>
 
             <a href="{% url 'shorts_export_zip' project.id %}" class="px-3.5 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold rounded-xl border border-zinc-700/60 transition-colors flex items-center gap-1.5">
                 <i data-lucide="download" class="w-3.5 h-3.5 text-zinc-400"></i>
@@ -209,7 +205,138 @@
             }, 1800);
         });
     }
+
+    function openBatchPublishModal() {
+        const modal = document.getElementById('batchPublishModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            if (window.lucide) lucide.createIcons();
+        }
+    }
+
+    function closeBatchPublishModal() {
+        const modal = document.getElementById('batchPublishModal');
+        if (modal) modal.classList.add('hidden');
+    }
 </script>
+
+<!-- Batch Publish All Shorts Modal (Fix 4) -->
+<div id="batchPublishModal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="batch-modal-title" role="dialog" aria-modal="true">
+    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity" onclick="closeBatchPublishModal()"></div>
+        <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+        <div class="inline-block align-bottom bg-zinc-900 border border-zinc-800 rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <form method="POST" action="{% url 'publishing_batch_shorts' project.id %}">
+                {% csrf_token %}
+                <div class="px-6 py-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/60">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center">
+                            <i data-lucide="layers" class="w-4 h-4 text-emerald-400"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-white tracking-tight" id="batch-modal-title">Publish All Shorts to YouTube</h3>
+                            <p class="text-xs text-zinc-400">Batch queue all {{ project.chop_count }} clips simultaneously</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="closeBatchPublishModal()" class="p-1.5 text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-800 transition-colors">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <div class="px-6 py-5 space-y-4">
+                    <!-- Target Channel -->
+                    <div>
+                        <label class="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5">Target Channel</label>
+                        {% if oauth_accounts %}
+                        <div class="p-3 bg-zinc-950 rounded-xl border border-zinc-800 flex items-center justify-between">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-7 h-7 rounded-full bg-zinc-800 overflow-hidden flex items-center justify-center shrink-0">
+                                    {% if oauth_accounts.0.thumbnail_url %}
+                                    <img src="{{ oauth_accounts.0.thumbnail_url }}" class="w-full h-full object-cover">
+                                    {% else %}
+                                    <i data-lucide="youtube" class="w-4 h-4 text-rose-500"></i>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <p class="text-xs font-bold text-white">{{ oauth_accounts.0.channel_title }}</p>
+                                    <p class="text-[10px] text-zinc-500 font-mono">{{ oauth_accounts.0.channel_custom_url|default:oauth_accounts.0.channel_id }}</p>
+                                </div>
+                            </div>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Connected</span>
+                        </div>
+                        {% else %}
+                        <div class="p-3 bg-zinc-950 rounded-xl border border-zinc-800 flex items-center justify-between text-xs">
+                            <span class="text-zinc-400">No active YouTube account linked.</span>
+                            <a href="{% url 'publishing_dashboard' %}" class="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[11px]">Connect Channel</a>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Privacy Mode -->
+                    <div>
+                        <label class="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">Publishing Visibility</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="flex flex-col p-2.5 rounded-xl border border-zinc-700 bg-zinc-800/80 cursor-pointer transition-all has-[:checked]:border-emerald-500 has-[:checked]:bg-zinc-800 text-center">
+                                <input type="radio" name="privacy_status" value="private" checked class="sr-only">
+                                <span class="text-xs font-bold text-white">Private Draft</span>
+                                <span class="text-[9px] text-zinc-400 mt-0.5">Review First</span>
+                            </label>
+                            <label class="flex flex-col p-2.5 rounded-xl border border-zinc-800 bg-zinc-950 cursor-pointer transition-all has-[:checked]:border-emerald-500 has-[:checked]:bg-zinc-800 text-center">
+                                <input type="radio" name="privacy_status" value="unlisted" class="sr-only">
+                                <span class="text-xs font-bold text-white">Unlisted</span>
+                                <span class="text-[9px] text-zinc-400 mt-0.5">Link Only</span>
+                            </label>
+                            <label class="flex flex-col p-2.5 rounded-xl border border-zinc-800 bg-zinc-950 cursor-pointer transition-all has-[:checked]:border-emerald-500 has-[:checked]:bg-zinc-800 text-center">
+                                <input type="radio" name="privacy_status" value="public" class="sr-only">
+                                <span class="text-xs font-bold text-white">Public</span>
+                                <span class="text-[9px] text-zinc-400 mt-0.5">Instant Live</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Scheduling / Drip -->
+                    <div>
+                        <label class="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">Upload Strategy</label>
+                        <div class="space-y-2">
+                            <label class="flex items-center gap-2.5 p-2.5 rounded-xl border border-zinc-700 bg-zinc-800/60 cursor-pointer text-xs text-white">
+                                <input type="radio" name="drip_interval_hours" value="0" checked class="accent-emerald-500">
+                                <div>
+                                    <span class="font-bold">Publish All at the Same Time</span>
+                                    <p class="text-[10px] text-zinc-400">All {{ project.chop_count }} shorts are queued simultaneously.</p>
+                                </div>
+                            </label>
+                            <label class="flex items-center gap-2.5 p-2.5 rounded-xl border border-zinc-800 bg-zinc-950 cursor-pointer text-xs text-zinc-300">
+                                <input type="radio" name="drip_interval_hours" value="2" class="accent-emerald-500">
+                                <div>
+                                    <span class="font-bold">Stagger Every 2 Hours</span>
+                                    <p class="text-[10px] text-zinc-400">Scheduled releases spaced 2 hours apart.</p>
+                                </div>
+                            </label>
+                            <label class="flex items-center gap-2.5 p-2.5 rounded-xl border border-zinc-800 bg-zinc-950 cursor-pointer text-xs text-zinc-300">
+                                <input type="radio" name="drip_interval_hours" value="24" class="accent-emerald-500">
+                                <div>
+                                    <span class="font-bold">Daily Drip (1 Short per Day)</span>
+                                    <p class="text-[10px] text-zinc-400">Auto-schedules 1 clip daily for maximum algorithmic reach.</p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-6 py-4 border-t border-zinc-800 bg-zinc-950/60 flex items-center justify-between">
+                    <button type="button" onclick="closeBatchPublishModal()" class="px-4 py-2 text-xs font-semibold text-zinc-400 hover:text-white rounded-xl hover:bg-zinc-800 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="flex items-center gap-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded-xl transition-colors shadow-sm">
+                        <i data-lucide="upload" class="w-4 h-4"></i>
+                        <span>Start Batch Upload ({{ project.chop_count }} Shorts)</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 {% include 'publishing/_publish_modal.html' %}
 {% endblock %}

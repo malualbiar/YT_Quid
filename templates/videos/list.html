@@ -8,7 +8,7 @@
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-            <h2 class="text-xl font-bold text-white tracking-tight">Monitored Music Videos & Songs</h2>
+            <h2 class="text-xl font-bold text-white tracking-tight">Monitored Music Videos &amp; Songs</h2>
             <p class="text-xs text-zinc-400">Total catalog of {{ total_count }} monitored songs across all channels</p>
         </div>
 
@@ -69,7 +69,7 @@
                     <th class="py-3.5 px-4 md:px-6 text-right hidden sm:table-cell">Today</th>
                     <th class="py-3.5 px-4 md:px-6 text-right hidden lg:table-cell">Likes</th>
                     <th class="py-3.5 px-4 md:px-6 text-right hidden xl:table-cell">Like Rate</th>
-                    <th class="py-3.5 px-4 md:px-6 text-right"></th>
+                    <th class="py-3.5 px-4 md:px-6 text-right">Actions</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-zinc-800/60 text-xs">
@@ -110,9 +110,23 @@
                         {{ video.like_rate }}%
                     </td>
                     <td class="py-3.5 px-4 md:px-6 text-right">
-                        <a href="{% url 'video_detail' video.id %}" class="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-white text-[11px] font-medium transition-colors whitespace-nowrap">
-                            Analytics
-                        </a>
+                        <div class="flex items-center justify-end gap-1.5">
+                            <a href="{% url 'video_detail' video.id %}" class="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-white text-[11px] font-medium transition-colors whitespace-nowrap">
+                                Analytics
+                            </a>
+                            {% if request.user.can_manage_artists or request.user.is_staff or request.user.is_superuser %}
+                            <form method="POST" action="{% url 'video_delete' video.id %}" data-delete-confirm="Are you sure you want to remove '{{ video.title|escapejs }}' from the catalog? This will hide the song from all catalog and analytics feeds." class="inline-block m-0 p-0">
+                                {% csrf_token %}
+                                <button
+                                    type="submit"
+                                    class="p-1 rounded bg-red-900/30 hover:bg-red-800/60 text-red-400 hover:text-red-300 text-[11px] font-medium transition-colors whitespace-nowrap border border-red-800/40 flex items-center justify-center"
+                                    title="Remove from catalog"
+                                >
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
                     </td>
                 </tr>
                 {% empty %}

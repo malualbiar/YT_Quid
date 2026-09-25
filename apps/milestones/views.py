@@ -6,7 +6,7 @@ from .models import VideoMilestone, NotificationLog
 @login_required
 def milestones_list_view(request):
     milestone_type = request.GET.get('type', '')
-    milestones = VideoMilestone.objects.select_related('video', 'video__artist').all()
+    milestones = VideoMilestone.objects.filter(video__is_active=True).select_related('video', 'video__artist')
 
     if milestone_type:
         milestones = milestones.filter(milestone_type=milestone_type)

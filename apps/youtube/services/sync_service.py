@@ -123,6 +123,10 @@ class SyncService:
                         likes_change = 0
                         comments_change = 0
                     else:
+                        # If video was deleted or set inactive, skip processing to avoid resurrecting it with snapshots/alerts
+                        if not video.is_active:
+                            continue
+
                         # Existing video update
                         prev_v_views = video.current_views
                         prev_v_likes = video.current_likes
@@ -168,6 +172,11 @@ class SyncService:
                             message=f"'{video.title}' gained +{views_change:,} views in the latest sync cycle!",
                             link=f"/videos/{video.id}/"
                         )
+
+            # Detect videos deleted on YouTube: if complete playlist was retrieved, any active video not found is deactivated
+            if videos_data and len(videos_data) < max_videos:
+                fetched_ids = {v['youtube_video_id'] for v in videos_data}
+                channel.videos.filter(is_active=True).exclude(youtube_video_id__in=fetched_ids).update(is_active=False)
 
             # Trigger real-time growth metrics update for this artist/channel
             try:

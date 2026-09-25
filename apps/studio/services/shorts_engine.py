@@ -98,13 +98,15 @@ class ShortsEngineService:
         return chops
 
     @classmethod
-    def prepare_overlay_banner(cls, hook_text="", part_label="", theme="VIRAL_HOOK", hook_position="TOP", width=1080, height=1920, output_png_path=None):
+    def prepare_overlay_banner(cls, hook_text="", part_label="", theme="VIRAL_HOOK", hook_position="TOP", show_cta_badge=True, cta_text="▶ Full Video on YouTube  •  Subscribe", width=1080, height=1920, output_png_path=None):
         """
         Creates a high-resolution transparent RGBA PNG overlay with modern typography,
         viral hook banner badges, and call-to-action pills for vertical 9:16 shorts.
         Supports hook_position: 'TOP', 'CENTER', or 'BOTTOM'.
+        Supports toggling the bottom call-to-action pill (show_cta_badge).
         """
-        if theme == 'CLEAN' and not hook_text and not part_label:
+        has_hook = bool(hook_text or part_label)
+        if (theme == 'CLEAN' or not has_hook) and not show_cta_badge:
             return None
 
         # Create transparent canvas
@@ -203,25 +205,26 @@ class ShortsEngineService:
             text_y = box_y1 + (box_h - text_h) // 2 - 2
             draw.text((text_x, text_y), banner_text, fill=text_color, font=font_large)
 
-        # 2. Bottom Call to Action Pill
-        cta_text = "▶ Full Video on YouTube  •  Subscribe"
-        try:
-            c_bbox = draw.textbbox((0, 0), cta_text, font=font_small)
-            c_w = c_bbox[2] - c_bbox[0]
-            c_h = c_bbox[3] - c_bbox[1]
-        except Exception:
-            c_w = len(cta_text) * 15
-            c_h = 28
+        # 2. Bottom Call to Action Pill (Toggleable)
+        if show_cta_badge:
+            cta_banner_text = cta_text.strip() if cta_text else "▶ Full Video on YouTube  •  Subscribe"
+            try:
+                c_bbox = draw.textbbox((0, 0), cta_banner_text, font=font_small)
+                c_w = c_bbox[2] - c_bbox[0]
+                c_h = c_bbox[3] - c_bbox[1]
+            except Exception:
+                c_w = len(cta_banner_text) * 15
+                c_h = 28
 
-        c_box_w = c_w + 50
-        c_box_h = c_h + 24
-        c_box_x1 = (width - c_box_w) // 2
-        c_box_y1 = height - 240
-        c_box_x2 = c_box_x1 + c_box_w
-        c_box_y2 = c_box_y1 + c_box_h
+            c_box_w = c_w + 50
+            c_box_h = c_h + 24
+            c_box_x1 = (width - c_box_w) // 2
+            c_box_y1 = height - 240
+            c_box_x2 = c_box_x1 + c_box_w
+            c_box_y2 = c_box_y1 + c_box_h
 
-        draw.rounded_rectangle([c_box_x1, c_box_y1, c_box_x2, c_box_y2], radius=20, fill=(10, 10, 15, 200), outline=(255, 255, 255, 80), width=2)
-        draw.text(((width - c_w) // 2, c_box_y1 + 12), cta_text, fill=(255, 255, 255, 240), font=font_small)
+            draw.rounded_rectangle([c_box_x1, c_box_y1, c_box_x2, c_box_y2], radius=20, fill=(10, 10, 15, 200), outline=(255, 255, 255, 80), width=2)
+            draw.text(((width - c_w) // 2, c_box_y1 + 12), cta_banner_text, fill=(255, 255, 255, 240), font=font_small)
 
         if output_png_path:
             os.makedirs(os.path.dirname(os.path.abspath(output_png_path)), exist_ok=True)
@@ -405,3 +408,76 @@ class ShortsEngineService:
                     os.remove(temp_bg)
                 except Exception:
                     pass
+
+    @classmethod
+    def download_youtube_video(cls, url, output_dir):
+        """
+        Downloads a YouTube video at best quality using yt-dlp + ffmpeg.
+        Merges video+audio into a single MP4 file.
+        Also extracts metadata: title, description, tags, channel_name, duration.
+
+        Returns a dict:
+        {
+            'path': str (absolute path to downloaded MP4),
+            'title': str,
+            'description': str,
+            'tags': list[str],
+            'channel_name': str,
+            'duration': float (seconds),
+            'video_id': str,
+        }
+        """
+        import yt_dlp
+        import glob
+        os.makedirs(output_dir, exist_ok=True)
+
+        if not url.startswith('http'):
+            url = f"https://www.youtube.com/watch?v={url}"
+
+        ydl_opts = {
+            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best',
+            'outtmpl': os.path.join(output_dir, '%(id)s_%(title).80s.%(ext)s'),
+            'merge_output_format': 'mp4',
+            'quiet': True,
+            'no_warnings': True,
+            'noplaylist': True,
+            'writeinfojson': False,
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+
+        title = info.get('title', 'YouTube Video')
+        description = info.get('description', '')
+        tags = info.get('tags', []) or []
+        channel_name = info.get('channel', '') or info.get('uploader', '') or ''
+        duration = float(info.get('duration', 0.0))
+        video_id = info.get('id', 'video')
+
+        # Sanitise title for filename matching (yt-dlp truncates/cleans the title)
+        safe_title = title[:80].replace('/', '_').replace('\\', '_')
+
+        # Find the merged MP4
+        pattern = os.path.join(output_dir, f"{video_id}_*.mp4")
+        matches = glob.glob(pattern)
+        if matches:
+            # Pick the largest file (most likely the fully merged output)
+            matches.sort(key=lambda p: os.path.getsize(p), reverse=True)
+            output_path = matches[0]
+        else:
+            # Fallback: search all mp4 files in dir
+            mp4s = [f for f in os.listdir(output_dir) if f.startswith(video_id) and f.endswith('.mp4')]
+            if not mp4s:
+                raise FileNotFoundError(f"Could not find downloaded MP4 for URL: {url} (video_id={video_id})")
+            mp4s.sort(key=lambda f: os.path.getsize(os.path.join(output_dir, f)), reverse=True)
+            output_path = os.path.join(output_dir, mp4s[0])
+
+        return {
+            'path': os.path.abspath(output_path),
+            'title': title,
+            'description': description or '',
+            'tags': [t for t in tags if t] if isinstance(tags, list) else [],
+            'channel_name': channel_name,
+            'duration': duration,
+            'video_id': video_id,
+        }
