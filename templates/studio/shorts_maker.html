@@ -1794,7 +1794,7 @@
         dropdown.classList.remove('hidden');
         optionsContainer.innerHTML = '<p class="text-[10px] text-zinc-500 px-1 py-2 text-center animate-pulse">Generating with Gemini AI...</p>';
 
-        const chop = chops[idx];
+        const chop = chopsData[idx];
         if (!chop) { dropdown.classList.add('hidden'); return; }
 
         const ctx = _aiGetContext();
@@ -1880,7 +1880,7 @@
      * silent=true suppresses per-chop toast (used on auto-trigger after YT download).
      */
     window.aiFillAllChops = async function(silent = false) {
-        if (chops.length === 0) {
+        if (chopsData.length === 0) {
             if (!silent) AppToast.warning('Add some chops first before generating AI content.');
             return;
         }
@@ -1892,8 +1892,8 @@
         const tone = _aiGetTone();
         let filled = 0;
 
-        for (let idx = 0; idx < chops.length; idx++) {
-            const chop = chops[idx];
+        for (let idx = 0; idx < chopsData.length; idx++) {
+            const chop = chopsData[idx];
             try {
                 const resp = await fetch(AI_GENERATE_URL, {
                     method: 'POST',
