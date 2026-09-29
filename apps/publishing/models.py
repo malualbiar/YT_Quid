@@ -4,6 +4,7 @@ from django.db import models
 from django.utils import timezone
 from apps.artists.models import YouTubeChannel
 
+
 logger = logging.getLogger(__name__)
 
 class YouTubeOAuthAccount(models.Model):
@@ -95,6 +96,61 @@ class YouTubeOAuthAccount(models.Model):
         super().save(*args, **kwargs)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# TikTok
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TikTokAccount(models.Model):
+    """
+    Stores an authenticated TikTok user account (OAuth 2.0) used for posting.
+    """
+    open_id = models.CharField(
+        max_length=200, unique=True, db_index=True,
+        help_text="TikTok unique user identifier (open_id)"
+    )
+    union_id = models.CharField(max_length=200, blank=True, default='')
+    display_name = models.CharField(max_length=255, help_text="TikTok display name / username")
+    avatar_url = models.URLField(max_length=1000, blank=True, default='')
+    follower_count = models.BigIntegerField(default=0)
+    following_count = models.BigIntegerField(default=0)
+    video_count = models.IntegerField(default=0)
+    bio_description = models.TextField(blank=True, default='')
+    profile_url = models.URLField(max_length=500, blank=True, default='')
+
+    access_token = models.TextField(blank=True, default='', help_text="Current OAuth access token")
+    refresh_token = models.TextField(blank=True, default='', help_text="OAuth refresh token (365-day lifetime)")
+    token_expires_at = models.DateTimeField(null=True, blank=True, help_text="When the current access_token expires")
+    token_scope = models.TextField(blank=True, default='', help_text="Granted OAuth scopes")
+
+    is_active = models.BooleanField(default=True)
+    is_default = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_default', 'display_name']
+        verbose_name = 'TikTok Account'
+        verbose_name_plural = 'TikTok Accounts'
+
+    def __str__(self):
+        default_str = " ★ [Default]" if self.is_default else ""
+        return f"@{self.display_name} ({self.open_id}){default_str}"
+
+    def save(self, *args, **kwargs):
+        if self.is_default:
+            TikTokAccount.objects.filter(is_default=True).exclude(pk=self.pk).update(is_default=False)
+        elif not TikTokAccount.objects.filter(is_default=True).exclude(pk=self.pk).exists():
+            self.is_default = True
+        super().save(*args, **kwargs)
+
+    @property
+    def is_token_expired(self):
+        if not self.token_expires_at:
+            return True
+        return timezone.now() >= self.token_expires_at
+
+
 class PublishingJob(models.Model):
     """
     Tracks video upload jobs, draft submissions, scheduled releases, and direct publishing.
@@ -120,10 +176,29 @@ class PublishingJob(models.Model):
         VIDEO_LOOP = 'VIDEO_LOOP', '1-Hour Study / Chill Loop'
         CUSTOM_FILE = 'CUSTOM_FILE', 'Custom Media Upload'
 
+    class Platform(models.TextChoices):
+        YOUTUBE = 'YOUTUBE', 'YouTube'
+        TIKTOK = 'TIKTOK', 'TikTok'
+
     class UploadEngine(models.TextChoices):
         API_V3 = 'API_V3', 'YouTube Data API v3 (Official API)'
         BROWSER_AUTOMATION = 'BROWSER_AUTOMATION', 'Browser Automation (Zero Quota)'
         STUDIO_DISPATCHER = 'STUDIO_DISPATCHER', '1-Click Studio Assistant (Clipboard)'
+        TIKTOK_DIRECT = 'TIKTOK_DIRECT', 'TikTok Direct Post API'
+        TIKTOK_INBOX = 'TIKTOK_INBOX', 'TikTok Inbox Draft'
+
+    class TikTokPrivacyLevel(models.TextChoices):
+        PUBLIC = 'PUBLIC_TO_EVERYONE', 'Public — Everyone'
+        FRIENDS = 'MUTUAL_FOLLOW_FRIENDS', 'Friends Only'
+        SELF = 'SELF_ONLY', 'Private (Only Me)'
+
+    platform = models.CharField(
+        max_length=10,
+        choices=Platform.choices,
+        default=Platform.YOUTUBE,
+        db_index=True,
+        help_text="Target publishing platform"
+    )
 
     account = models.ForeignKey(
         YouTubeOAuthAccount,
@@ -133,17 +208,25 @@ class PublishingJob(models.Model):
         related_name='jobs',
         help_text="Target YouTube channel account"
     )
+    tiktok_account = models.ForeignKey(
+        TikTokAccount,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='jobs',
+        help_text="Target TikTok account"
+    )
 
     upload_engine = models.CharField(
         max_length=30,
         choices=UploadEngine.choices,
         default=UploadEngine.API_V3,
-        help_text="Engine / protocol used to upload video to YouTube"
+        help_text="Engine / protocol used to upload video"
     )
 
     # Video Metadata
-    title = models.CharField(max_length=100, help_text="YouTube video title (max 100 characters)")
-    description = models.TextField(blank=True, default='', help_text="YouTube video description (max 5,000 characters)")
+    title = models.CharField(max_length=150, help_text="Video title / caption (max 100 chars YouTube, 2200 chars TikTok)")
+    description = models.TextField(blank=True, default='', help_text="Video description / caption body")
     tags = models.JSONField(default=list, blank=True, help_text="List of keyword tags")
     category_id = models.CharField(max_length=10, default='10', help_text="YouTube Category ID (10=Music, 24=Entertainment, 22=People & Blogs)")
     
@@ -175,9 +258,27 @@ class PublishingJob(models.Model):
     bytes_uploaded = models.BigIntegerField(default=0)
     total_bytes = models.BigIntegerField(default=0)
 
+    # TikTok-specific metadata
+    tiktok_privacy_level = models.CharField(
+        max_length=30,
+        choices=TikTokPrivacyLevel.choices,
+        default=TikTokPrivacyLevel.PUBLIC,
+        blank=True
+    )
+    tiktok_disable_duet = models.BooleanField(default=False)
+    tiktok_disable_comment = models.BooleanField(default=False)
+    tiktok_disable_stitch = models.BooleanField(default=False)
+    tiktok_branded_content = models.BooleanField(default=False)
+
     # YouTube Output
     youtube_video_id = models.CharField(max_length=50, blank=True, default='', db_index=True)
     youtube_url = models.URLField(max_length=500, blank=True, default='')
+
+    # TikTok Output
+    tiktok_publish_id = models.CharField(max_length=200, blank=True, default='', db_index=True)
+    tiktok_video_id = models.CharField(max_length=200, blank=True, default='')
+    tiktok_share_url = models.URLField(max_length=500, blank=True, default='')
+
     error_message = models.TextField(blank=True, default='')
     retry_count = models.IntegerField(default=0)
 

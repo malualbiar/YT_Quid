@@ -25,11 +25,27 @@ SECRET_KEY = os.getenv(
 )
 
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
+_allowed = [
+    h.strip()
+    for h in os.getenv(
+        'ALLOWED_HOSTS',
+        'localhost,127.0.0.1'
+    ).split(',')
+    if h.strip()
+]
 
-_allowed = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h.strip()]
 _allowed += ['testserver', '127.0.0.1', 'localhost']
+
+# Allow Cloudflare Quick Tunnel during local development
+_allowed += ['.trycloudflare.com']
+
 # On Render, RENDER_EXTERNAL_HOSTNAME is set automatically.
 _render_host = os.getenv('RENDER_EXTERNAL_HOSTNAME', '')
+
+if _render_host:
+    _allowed.append(_render_host)
+
+ALLOWED_HOSTS = list(dict.fromkeys(_allowed))
 if _render_host:
     _allowed.append(_render_host)
 ALLOWED_HOSTS = list(set(_allowed))
@@ -193,6 +209,11 @@ SYNC_INTERVAL_HOURS = int(os.getenv('SYNC_INTERVAL_HOURS', '6'))
 GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '')
 GOOGLE_OAUTH_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH_CLIENT_SECRET', '')
 GOOGLE_OAUTH_REDIRECT_URI = os.getenv('GOOGLE_OAUTH_REDIRECT_URI', 'http://127.0.0.1:8000/publishing/oauth/callback/')
+
+# TikTok OAuth 2.0 Credentials (Content Posting API)
+# Get from https://developers.tiktok.com — requires Login Kit + Content Posting API products
+TIKTOK_CLIENT_KEY = os.getenv('TIKTOK_CLIENT_KEY', '')
+TIKTOK_CLIENT_SECRET = os.getenv('TIKTOK_CLIENT_SECRET', '')
 
 # Gemini AI Content Generation
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')

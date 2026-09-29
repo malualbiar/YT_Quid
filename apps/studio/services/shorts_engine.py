@@ -51,6 +51,121 @@ class ShortsEngineService:
         return 60.0  # Safe default 60s
 
     @classmethod
+    def write_caption_srt(cls, words, duration_seconds, output_srt_path):
+        duration = max(0.0, float(duration_seconds))
+        groups = []
+        current = []
+
+        def flush_group():
+            if current:
+                groups.append(current[:])
+                current.clear()
+
+        for word in words:
+            text = str(word.get('word', '')).strip()
+            start = max(0.0, float(word.get('start', 0.0)))
+            end = min(duration, float(word.get('end', start)))
+            if not text or start >= duration or end <= start:
+                continue
+
+            current_text = ' '.join(item['word'] for item in current)
+            if current and (
+                len(current) >= 5
+                or len(current_text) + len(text) + 1 > 38
+                or start - current[-1]['end'] > 0.8
+            ):
+                flush_group()
+            current.append({'word': text, 'start': start, 'end': end})
+        flush_group()
+
+        if not groups:
+            return None
+
+        def timestamp(seconds):
+            milliseconds = max(0, int(round(seconds * 1000)))
+            hours, milliseconds = divmod(milliseconds, 3_600_000)
+            minutes, milliseconds = divmod(milliseconds, 60_000)
+            seconds, milliseconds = divmod(milliseconds, 1000)
+            return f'{hours:02d}:{minutes:02d}:{seconds:02d},{milliseconds:03d}'
+
+        os.makedirs(os.path.dirname(os.path.abspath(output_srt_path)), exist_ok=True)
+        with open(output_srt_path, 'w', encoding='utf-8') as subtitle_file:
+            for index, group in enumerate(groups, start=1):
+                text = ' '.join(item['word'] for item in group)
+                start = min(duration, group[0]['start'])
+                end = min(duration, max(group[-1]['end'], start + 0.15))
+                if end <= start:
+                    continue
+                subtitle_file.write(
+                    f'{index}\n{timestamp(start)} --> {timestamp(end)}\n{text}\n\n'
+                )
+        return output_srt_path
+
+    @classmethod
+    def transcribe_clip_captions(cls, source_path, start_seconds, duration_seconds, output_srt_path, model):
+        audio_path = output_srt_path[:-4] + '.wav'
+        ffmpeg = cls.get_ffmpeg_binary()
+        start = max(0.0, float(start_seconds))
+        duration = max(0.1, float(duration_seconds))
+        try:
+            proc = subprocess.run(
+                [
+                    ffmpeg, '-y', '-ss', f'{start:.3f}', '-t', f'{duration:.3f}',
+                    '-i', os.path.abspath(str(source_path)), '-vn', '-ac', '1',
+                    '-ar', '16000', '-c:a', 'pcm_s16le', audio_path,
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                errors='ignore',
+                **cls.get_subprocess_kwargs(),
+            )
+            if proc.returncode != 0 or not os.path.exists(audio_path):
+                raise RuntimeError(f'Could not extract clip audio for captions: {proc.stderr[-300:]}')
+
+            segments, _ = model.transcribe(
+                audio_path,
+                beam_size=1,
+                word_timestamps=True,
+                vad_filter=True,
+            )
+            words = []
+            for segment in segments:
+                if segment.words:
+                    words.extend(
+                        {
+                            'word': word.word,
+                            'start': word.start,
+                            'end': word.end,
+                        }
+                        for word in segment.words
+                    )
+                    continue
+
+                segment_words = (segment.text or '').split()
+                segment_duration = max(0.1, segment.end - segment.start)
+                word_duration = segment_duration / max(1, len(segment_words))
+                words.extend(
+                    {
+                        'word': word,
+                        'start': segment.start + index * word_duration,
+                        'end': segment.start + (index + 1) * word_duration,
+                    }
+                    for index, word in enumerate(segment_words)
+                )
+
+            return cls.write_caption_srt(words, duration, output_srt_path)
+        finally:
+            if os.path.exists(audio_path):
+                os.remove(audio_path)
+
+    @classmethod
+    def _caption_filter(cls, subtitle_path):
+        escaped_path = os.path.abspath(str(subtitle_path)).replace('\\', '/').replace(':', r'\:').replace("'", r"\'")
+        style = 'FontName=Arial,FontSize=58,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=4,Shadow=1,Alignment=2,MarginV=220'
+        return f"subtitles=filename='{escaped_path}':force_style='{style}'"
+
+    @classmethod
     def generate_chop_splits(cls, total_duration, interval_seconds=15.0, hook_prefix="Wait for the end... 🔥"):
         """
         Generates automatic even chops for a given total duration.
@@ -234,7 +349,7 @@ class ShortsEngineService:
         return img
 
     @classmethod
-    def render_video_chop(cls, source_video_path, output_mp4_path, start_seconds, duration_seconds, aspect_mode='BLURRED_FIT', overlay_png_path=None, crop_focal_percent=50, project_id=None):
+    def render_video_chop(cls, source_video_path, output_mp4_path, start_seconds, duration_seconds, aspect_mode='BLURRED_FIT', overlay_png_path=None, crop_focal_percent=50, project_id=None, subtitle_path=None):
         """
         Extracts and converts a video segment to 1080x1920 (9:16) with subject framing and overlay banners.
         """
@@ -259,6 +374,10 @@ class ShortsEngineService:
                 "[0:v]scale=1080:-1[fg]; "
                 "[bg][fg]overlay=(W-w)/2:(H-h)/2[base]"
             )
+
+        if subtitle_path and os.path.exists(str(subtitle_path)):
+            vf_base = vf_base.replace('[base]', '[base_without_captions]')
+            vf_base += f"; [base_without_captions]{cls._caption_filter(subtitle_path)}[base]"
 
         inputs = [
             '-ss', f"{start_s:.3f}",
@@ -320,7 +439,7 @@ class ShortsEngineService:
         return output_mp4_path
 
     @classmethod
-    def render_audio_cover_chop(cls, cover_path, audio_path, output_mp4_path, start_seconds, duration_seconds, overlay_png_path=None, project_id=None):
+    def render_audio_cover_chop(cls, cover_path, audio_path, output_mp4_path, start_seconds, duration_seconds, overlay_png_path=None, project_id=None, subtitle_path=None):
         """
         Renders a 1080x1920 vertical video from an audio file and cover image.
         """
@@ -346,13 +465,17 @@ class ShortsEngineService:
                 '-i', audio_path
             ]
 
+            filter_parts = []
+            video_label = '[0:v]'
             if overlay_png_path and os.path.exists(str(overlay_png_path)):
                 inputs.extend(['-i', os.path.abspath(str(overlay_png_path))])
-                filter_complex = "[0:v][2:v]overlay=0:0[vout]"
-                map_args = ['-map', '[vout]', '-map', '1:a']
-            else:
-                filter_complex = None
-                map_args = ['-map', '0:v', '-map', '1:a']
+                filter_parts.append('[0:v][2:v]overlay=0:0[base]')
+                video_label = '[base]'
+            if subtitle_path and os.path.exists(str(subtitle_path)):
+                filter_parts.append(f"{video_label}{cls._caption_filter(subtitle_path)}[captioned]")
+                video_label = '[captioned]'
+            filter_complex = '; '.join(filter_parts) if filter_parts else None
+            map_args = ['-map', video_label, '-map', '1:a']
 
             cmd = [
                 ffmpeg, '-y',

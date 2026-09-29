@@ -2,16 +2,18 @@ import os
 import shutil
 import time
 import json
+import re
 import zipfile
 import threading
+import tempfile
 from io import BytesIO
 from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 from django.contrib import messages
 from django.core.files import File
-from django.http import HttpResponse, JsonResponse, FileResponse
+from django.http import HttpResponse, JsonResponse, FileResponse, StreamingHttpResponse
 from django.urls import reverse
 from django.db import connections
 
@@ -534,7 +536,7 @@ def shorts_maker_view(request):
     })
 
 
-def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_focal_percent, source_type, hook_position='TOP', show_cta_badge=True):
+def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_focal_percent, source_type, hook_position='TOP', show_cta_badge=True, auto_captions=False):
     from django.db import connections
     connections.close_all()
     try:
@@ -545,6 +547,7 @@ def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_foc
     project_output_dir = os.path.join(settings.MEDIA_ROOT, 'studio', 'shorts_output', str(project.id))
     os.makedirs(project_output_dir, exist_ok=True)
     RenderProcessTracker.clear_cancelled('shorts', project.id)
+    caption_dir = None
 
     try:
         RenderProcessTracker.set_progress('shorts', project.id, 5, 'Inspecting media duration...')
@@ -564,7 +567,37 @@ def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_foc
         import concurrent.futures
 
         total_chops = max(1, len(chops))
-        RenderProcessTracker.set_progress('shorts', project.id, 10, f"Encoding {total_chops} vertical 9:16 chops with FFmpeg...")
+        caption_paths = {}
+        render_progress_start = 10
+        if auto_captions:
+            from faster_whisper import WhisperModel
+            caption_dir = tempfile.mkdtemp(prefix='shorts_captions_', dir=project_output_dir)
+            RenderProcessTracker.set_progress('shorts', project.id, 10, 'Loading local speech recognition model...')
+            caption_model = WhisperModel('tiny', device='cpu', compute_type='int8')
+            for idx, chop in enumerate(chops):
+                RenderProcessTracker.set_progress(
+                    'shorts', project.id,
+                    10 + int((idx / total_chops) * 10),
+                    f"Transcribing captions for clip {idx + 1}/{total_chops}...",
+                )
+                chop_id = int(chop.get('id') or idx + 1)
+                subtitle_path = os.path.join(caption_dir, f'captions_part{chop_id}.srt')
+                result_path = ShortsEngineService.transcribe_clip_captions(
+                    src_path,
+                    chop.get('start_seconds', 0.0),
+                    max(1.0, float(chop.get('end_seconds', 15.0)) - float(chop.get('start_seconds', 0.0))),
+                    subtitle_path,
+                    caption_model,
+                )
+                if result_path:
+                    caption_paths[idx] = result_path
+            del caption_model
+            render_progress_start = 20
+
+        RenderProcessTracker.set_progress(
+            'shorts', project.id, render_progress_start,
+            f"Encoding {total_chops} vertical 9:16 chops with FFmpeg...",
+        )
         rendered_chops_map = {}
         completed_count = 0
         progress_lock = threading.Lock()
@@ -574,7 +607,7 @@ def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_foc
             if RenderProcessTracker.is_cancelled('shorts', project.id):
                 return None
 
-            chop_id = idx + 1
+            chop_id = int(chop.get('id') or idx + 1)
             chop_title = chop.get('title', f"Part {chop_id}")
             hook_text = chop.get('hook_text', '')
             chop_hook_pos = chop.get('hook_position') or hook_position or getattr(project, 'hook_position', 'TOP') or 'TOP'
@@ -620,7 +653,8 @@ def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_foc
                     aspect_mode=aspect_mode,
                     overlay_png_path=overlay_png,
                     crop_focal_percent=crop_focal_percent,
-                    project_id=project.id
+                    project_id=project.id,
+                    subtitle_path=caption_paths.get(idx),
                 )
             else:
                 ShortsEngineService.render_audio_cover_chop(
@@ -630,7 +664,8 @@ def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_foc
                     start_seconds=start_s,
                     duration_seconds=dur_s,
                     overlay_png_path=overlay_png,
-                    project_id=project.id
+                    project_id=project.id,
+                    subtitle_path=caption_paths.get(idx),
                 )
 
             # Cleanup overlay PNG
@@ -643,7 +678,7 @@ def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_foc
             nonlocal completed_count
             with progress_lock:
                 completed_count += 1
-                pct = int(10 + (completed_count / total_chops) * 80)
+                pct = int(render_progress_start + (completed_count / total_chops) * (90 - render_progress_start))
                 RenderProcessTracker.set_progress(
                     'shorts', project.id, pct,
                     f"Encoded Chop {completed_count}/{total_chops}: '{chop_title}' ({dur_s}s)..."
@@ -707,6 +742,8 @@ def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_foc
             project.error_message = str(e)
         project.save()
     finally:
+        if caption_dir and os.path.exists(caption_dir):
+            shutil.rmtree(caption_dir, ignore_errors=True)
         connections.close_all()
 
 
@@ -730,6 +767,7 @@ def shorts_render_view(request):
     theme_style = request.POST.get('theme_style', ShortVideoProject.ThemeStyle.VIRAL_HOOK)
     hook_position = request.POST.get('hook_position', ShortVideoProject.HookPosition.TOP)
     show_cta_badge = request.POST.get('show_cta_badge') in ['1', 'true', 'True', 'on'] if 'show_cta_badge' in request.POST else True
+    auto_captions = request.POST.get('auto_captions') in ['1', 'true', 'True', 'on']
 
     # YouTube URL metadata (from yt-dlp download)
     source_yt_url = request.POST.get('source_yt_url', '').strip()
@@ -775,6 +813,17 @@ def shorts_render_view(request):
         except Exception:
             pass
 
+    selected_chops = [
+        chop for chop in chops
+        if isinstance(chop, dict) and chop.get('render_enabled', True) is not False
+    ]
+    if chops and not selected_chops:
+        err_msg = 'Select at least one clip to render.'
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({'error': err_msg}, status=400)
+        messages.error(request, err_msg)
+        return redirect('shorts_maker')
+
     # Create project record
     project = ShortVideoProject.objects.create(
         title=title,
@@ -787,7 +836,7 @@ def shorts_render_view(request):
         theme_style=theme_style,
         hook_position=hook_position,
         show_cta_badge=show_cta_badge,
-        chops_data=chops,
+        chops_data=selected_chops,
         source_yt_url=source_yt_url,
         yt_video_title=yt_video_title,
         yt_video_description=yt_video_description,
@@ -808,7 +857,7 @@ def shorts_render_view(request):
         # Launch render in daemon worker thread
         thread = threading.Thread(
             target=_execute_shorts_render,
-            args=(project.id, chops, aspect_mode, theme_style, crop_focal_percent, source_type, hook_position, show_cta_badge),
+            args=(project.id, selected_chops, aspect_mode, theme_style, crop_focal_percent, source_type, hook_position, show_cta_badge, auto_captions),
             daemon=True
         )
         thread.start()
@@ -822,7 +871,7 @@ def shorts_render_view(request):
         })
 
     # Synchronous execution fallback for direct POST
-    _execute_shorts_render(project.id, chops, aspect_mode, theme_style, crop_focal_percent, source_type, hook_position, show_cta_badge)
+    _execute_shorts_render(project.id, selected_chops, aspect_mode, theme_style, crop_focal_percent, source_type, hook_position, show_cta_badge, auto_captions)
     project.refresh_from_db()
     if project.render_status == ShortVideoProject.Status.COMPLETED:
         messages.success(request, f"Successfully created {project.chop_count} vertical 9:16 shorts for '{project.title}'!")
@@ -941,6 +990,10 @@ def shorts_yt_download_view(request):
         return JsonResponse({
             'success': True,
             'path': result['path'],
+            'preview_url': reverse(
+                'shorts_yt_preview',
+                kwargs={'filename': os.path.basename(result['path'])},
+            ),
             'title': result['title'],
             'description': result['description'],
             'tags': result['tags'],
@@ -950,6 +1003,74 @@ def shorts_yt_download_view(request):
         })
     except Exception as e:
         return JsonResponse({'error': f'Download failed: {str(e)}'}, status=500)
+
+
+@login_required
+@require_GET
+def shorts_yt_preview_view(request, filename):
+    if not request.user.is_super_admin:
+        return HttpResponse('Access denied', status=403)
+
+    download_dir = os.path.realpath(os.path.join(settings.MEDIA_ROOT, 'studio', 'yt_downloads'))
+    safe_filename = os.path.basename(filename)
+    file_path = os.path.realpath(os.path.join(download_dir, safe_filename))
+    if os.path.commonpath([download_dir, file_path]) != download_dir or not os.path.isfile(file_path):
+        return HttpResponse(status=404)
+
+    file_size = os.path.getsize(file_path)
+    range_header = request.headers.get('Range', '')
+    start, end = 0, max(0, file_size - 1)
+    status_code = 200
+
+    if range_header:
+        match = re.fullmatch(r'bytes=(\d*)-(\d*)', range_header.strip())
+        if not match or file_size == 0:
+            response = HttpResponse(status=416)
+            response['Content-Range'] = f'bytes */{file_size}'
+            response['Accept-Ranges'] = 'bytes'
+            return response
+
+        range_start, range_end = match.groups()
+        if range_start:
+            start = int(range_start)
+            end = int(range_end) if range_end else file_size - 1
+        else:
+            suffix_length = int(range_end or 0)
+            if suffix_length <= 0:
+                response = HttpResponse(status=416)
+                response['Content-Range'] = f'bytes */{file_size}'
+                response['Accept-Ranges'] = 'bytes'
+                return response
+            start = max(0, file_size - suffix_length)
+            end = file_size - 1
+
+        if start >= file_size or end < start:
+            response = HttpResponse(status=416)
+            response['Content-Range'] = f'bytes */{file_size}'
+            response['Accept-Ranges'] = 'bytes'
+            return response
+        end = min(end, file_size - 1)
+        status_code = 206
+
+    content_length = end - start + 1
+
+    def stream_file():
+        with open(file_path, 'rb') as media_file:
+            media_file.seek(start)
+            remaining = content_length
+            while remaining:
+                chunk = media_file.read(min(64 * 1024, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                yield chunk
+
+    response = StreamingHttpResponse(stream_file(), status=status_code, content_type='video/mp4')
+    response['Accept-Ranges'] = 'bytes'
+    response['Content-Length'] = str(content_length)
+    if status_code == 206:
+        response['Content-Range'] = f'bytes {start}-{end}/{file_size}'
+    return response
 
 
 @login_required

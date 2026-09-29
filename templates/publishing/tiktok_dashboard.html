@@ -1,0 +1,521 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}TikTok Publishing — YT Quid{% endblock %}
+
+{% block content %}
+<div class="space-y-6 max-w-7xl mx-auto pb-20">
+
+    <!-- ── Page Header ──────────────────────────────────────────────────── -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h2 class="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+                <span class="text-xl">♪</span> TikTok Publishing
+            </h2>
+            <p class="text-xs text-zinc-400 mt-0.5">Connect accounts, post videos directly or as drafts, track uploads</p>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+            <a href="{% url 'tiktok_monitor' %}" class="flex items-center gap-2 px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-semibold rounded-xl border border-zinc-800 transition-colors">
+                <i data-lucide="monitor" class="w-4 h-4"></i>
+                <span>Monitor Videos</span>
+                {% if active_jobs.count > 0 %}
+                <span class="bg-amber-500 text-zinc-950 text-[10px] font-bold px-1.5 rounded-full">{{ active_jobs.count }}</span>
+                {% endif %}
+            </a>
+            <a href="{% url 'publishing_dashboard' %}" class="flex items-center gap-2 px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 text-xs font-semibold rounded-xl border border-zinc-800 transition-colors">
+                <i data-lucide="youtube" class="w-4 h-4 text-red-500"></i>
+                <span>YouTube Publisher</span>
+            </a>
+            {% if is_configured %}
+            <a href="{% url 'tiktok_oauth_connect' %}" class="flex items-center gap-2 px-4 py-2 bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-bold rounded-xl transition-colors">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>Connect Account</span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ── Setup banner (no credentials) ───────────────────────────────── -->
+    {% if not is_configured %}
+    <div class="glass-panel rounded-2xl p-5 border border-amber-500/20 bg-amber-500/5">
+        <div class="flex items-start gap-4">
+            <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-400"></i>
+            </div>
+            <div class="flex-1">
+                <h3 class="text-sm font-bold text-amber-300">TikTok App Credentials Not Configured</h3>
+                <p class="text-xs text-zinc-400 mt-1">Add the following to your <code class="bg-zinc-800 px-1 rounded text-zinc-200">.env</code> file to enable TikTok publishing:</p>
+                <pre class="mt-3 bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-xs text-emerald-400 font-mono overflow-x-auto">TIKTOK_CLIENT_KEY=your_client_key_here
+TIKTOK_CLIENT_SECRET=your_client_secret_here</pre>
+                <p class="text-xs text-zinc-500 mt-2">Get your credentials at <a href="https://developers.tiktok.com" target="_blank" class="text-zinc-300 underline hover:text-white">developers.tiktok.com</a> — you need <strong class="text-zinc-200">Login Kit</strong> + <strong class="text-zinc-200">Content Posting API</strong> products approved on your app.</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ── KPI Stats ─────────────────────────────────────────────────────── -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="glass-panel p-5 rounded-2xl">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-medium text-zinc-400">Accounts</span>
+                <div class="w-8 h-8 rounded-xl bg-zinc-800 flex items-center justify-center">
+                    <i data-lucide="user-circle" class="w-4 h-4 text-zinc-300"></i>
+                </div>
+            </div>
+            <div class="mt-3">
+                <span class="text-2xl font-bold text-white">{{ accounts.count }}</span>
+                <span class="text-[11px] text-zinc-500 block mt-0.5">Connected</span>
+            </div>
+        </div>
+        <div class="glass-panel p-5 rounded-2xl">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-medium text-zinc-400">Published</span>
+                <div class="w-8 h-8 rounded-xl bg-zinc-800 flex items-center justify-center">
+                    <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>
+                </div>
+            </div>
+            <div class="mt-3">
+                <span class="text-2xl font-bold text-white">{{ completed_jobs }}</span>
+                <span class="text-[11px] text-zinc-500 block mt-0.5">Successful posts</span>
+            </div>
+        </div>
+        <div class="glass-panel p-5 rounded-2xl">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-medium text-zinc-400">Active</span>
+                <div class="w-8 h-8 rounded-xl bg-zinc-800 flex items-center justify-center">
+                    <i data-lucide="activity" class="w-4 h-4 text-amber-400"></i>
+                </div>
+            </div>
+            <div class="mt-3">
+                <span class="text-2xl font-bold text-white">{{ active_jobs.count }}</span>
+                <span class="text-[11px] text-zinc-500 block mt-0.5">Uploading now</span>
+            </div>
+        </div>
+        <div class="glass-panel p-5 rounded-2xl">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-medium text-zinc-400">Failed</span>
+                <div class="w-8 h-8 rounded-xl bg-zinc-800 flex items-center justify-center">
+                    <i data-lucide="x-circle" class="w-4 h-4 text-red-400"></i>
+                </div>
+            </div>
+            <div class="mt-3">
+                <span class="text-2xl font-bold text-white">{{ failed_jobs }}</span>
+                <span class="text-[11px] text-zinc-500 block mt-0.5">Errors</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Connected Accounts ────────────────────────────────────────────── -->
+    <div>
+        <h3 class="text-sm font-bold text-zinc-300 mb-3 flex items-center gap-2">
+            <i data-lucide="users" class="w-4 h-4 text-zinc-400"></i> Connected TikTok Accounts
+        </h3>
+        {% if accounts %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for acc in accounts %}
+            <div class="glass-panel rounded-2xl p-4 flex flex-col gap-3 {% if acc.is_default %}ring-1 ring-zinc-400/30{% endif %}">
+                <div class="flex items-center gap-3">
+                    {% if acc.avatar_url %}
+                    <img src="{{ acc.avatar_url }}" alt="@{{ acc.display_name }}" class="w-11 h-11 rounded-full object-cover border border-zinc-700 shrink-0">
+                    {% else %}
+                    <div class="w-11 h-11 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-300 font-bold text-lg shrink-0">
+                        {{ acc.display_name|slice:":1"|upper }}
+                    </div>
+                    {% endif %}
+                    <div class="min-w-0">
+                        <p class="text-sm font-bold text-white truncate">@{{ acc.display_name }}</p>
+                        <p class="text-[11px] text-zinc-500 truncate">{{ acc.follower_count|intcomma }} followers · {{ acc.video_count|intcomma }} videos</p>
+                        {% if acc.is_default %}
+                        <span class="inline-block text-[10px] font-bold text-zinc-300 bg-zinc-700 px-1.5 py-0.5 rounded mt-0.5">Default</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <!-- Token status -->
+                <div class="flex items-center gap-1.5 text-[11px] {% if acc.is_token_expired %}text-amber-400{% else %}text-emerald-400{% endif %}">
+                    <i data-lucide="{% if acc.is_token_expired %}alert-circle{% else %}shield-check{% endif %}" class="w-3.5 h-3.5"></i>
+                    {% if acc.is_token_expired %}Token expired — will auto-refresh on next post{% else %}Token valid{% endif %}
+                </div>
+                <!-- Actions -->
+                <div class="flex items-center gap-2 flex-wrap">
+                    {% if not acc.is_default %}
+                    <form method="post" action="{% url 'tiktok_oauth_default' acc.pk %}" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors">Set Default</button>
+                    </form>
+                    {% endif %}
+                    <button onclick="openPostModal('{{ acc.pk }}', '@{{ acc.display_name }}')" class="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-zinc-100 hover:bg-white text-zinc-950 transition-colors flex items-center gap-1">
+                        <i data-lucide="upload" class="w-3 h-3"></i> Post Video
+                    </button>
+                    <form method="post" action="{% url 'tiktok_oauth_disconnect' acc.pk %}" class="inline" onsubmit="return confirm('Disconnect @{{ acc.display_name }}? This will remove the account but keep job history.')">
+                        {% csrf_token %}
+                        <button type="submit" class="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-zinc-900 hover:bg-red-500/10 text-zinc-500 hover:text-red-400 border border-zinc-800 hover:border-red-500/30 transition-colors">Disconnect</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="glass-panel rounded-2xl p-10 text-center">
+            <div class="w-14 h-14 rounded-2xl bg-zinc-800 border border-zinc-700 flex items-center justify-center mx-auto mb-4">
+                <i data-lucide="user-plus" class="w-6 h-6 text-zinc-400"></i>
+            </div>
+            <p class="text-sm font-semibold text-zinc-300">No TikTok accounts connected</p>
+            <p class="text-xs text-zinc-500 mt-1">Connect a TikTok account to start publishing videos.</p>
+            {% if is_configured %}
+            <a href="{% url 'tiktok_oauth_connect' %}" class="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-bold rounded-xl transition-colors">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Connect TikTok Account
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ── Studio Projects ready to post ────────────────────────────────── -->
+    {% if accounts %}
+    {% if rendered_shorts or rendered_loops or rendered_mixes or rendered_lyrics %}
+    <div>
+        <h3 class="text-sm font-bold text-zinc-300 mb-3 flex items-center gap-2">
+            <i data-lucide="film" class="w-4 h-4 text-zinc-400"></i> Ready to Post from Studio
+        </h3>
+
+        <!-- Shorts -->
+        {% if rendered_shorts %}
+        <p class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Shorts / Clips</p>
+        <div class="flex gap-3 overflow-x-auto pb-2 mb-4 scrollbar-thin">
+            {% for proj in rendered_shorts %}
+            <div class="glass-panel rounded-xl p-3 min-w-[200px] max-w-[200px] flex-shrink-0">
+                <p class="text-xs font-semibold text-white truncate mb-1">{{ proj.title }}</p>
+                <p class="text-[11px] text-zinc-500 mb-3">{{ proj.created_at|date:"M d" }}</p>
+                <button onclick="prefillPostModal('{{ proj.output_video.url|default:'' }}', '{{ proj.title|escapejs }}', 'SHORT_VIDEO', '{{ proj.pk }}')"
+                    class="w-full px-2 py-1.5 bg-zinc-100 hover:bg-white text-zinc-950 text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1">
+                    <i data-lucide="upload" class="w-3 h-3"></i> Post to TikTok
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Loops -->
+        {% if rendered_loops %}
+        <p class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">1-Hour Loops</p>
+        <div class="flex gap-3 overflow-x-auto pb-2 mb-4 scrollbar-thin">
+            {% for proj in rendered_loops %}
+            <div class="glass-panel rounded-xl p-3 min-w-[200px] max-w-[200px] flex-shrink-0">
+                <p class="text-xs font-semibold text-white truncate mb-1">{{ proj.title }}</p>
+                <p class="text-[11px] text-zinc-500 mb-3">{{ proj.created_at|date:"M d" }}</p>
+                <button onclick="prefillPostModal('{{ proj.output_video.url|default:'' }}', '{{ proj.title|escapejs }}', 'VIDEO_LOOP', '{{ proj.pk }}')"
+                    class="w-full px-2 py-1.5 bg-zinc-100 hover:bg-white text-zinc-950 text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1">
+                    <i data-lucide="upload" class="w-3 h-3"></i> Post to TikTok
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Mixes -->
+        {% if rendered_mixes %}
+        <p class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Non-Stop Mixes</p>
+        <div class="flex gap-3 overflow-x-auto pb-2 mb-4 scrollbar-thin">
+            {% for proj in rendered_mixes %}
+            <div class="glass-panel rounded-xl p-3 min-w-[200px] max-w-[200px] flex-shrink-0">
+                <p class="text-xs font-semibold text-white truncate mb-1">{{ proj.title }}</p>
+                <p class="text-[11px] text-zinc-500 mb-3">{{ proj.created_at|date:"M d" }}</p>
+                <button onclick="prefillPostModal('{{ proj.output_video.url|default:'' }}', '{{ proj.title|escapejs }}', 'LONG_MIX', '{{ proj.pk }}')"
+                    class="w-full px-2 py-1.5 bg-zinc-100 hover:bg-white text-zinc-950 text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1">
+                    <i data-lucide="upload" class="w-3 h-3"></i> Post to TikTok
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Lyrics Videos -->
+        {% if rendered_lyrics %}
+        <p class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Lyrics Videos</p>
+        <div class="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+            {% for proj in rendered_lyrics %}
+            <div class="glass-panel rounded-xl p-3 min-w-[200px] max-w-[200px] flex-shrink-0">
+                <p class="text-xs font-semibold text-white truncate mb-1">{{ proj.title }}</p>
+                <p class="text-[11px] text-zinc-500 mb-3">{{ proj.created_at|date:"M d" }}</p>
+                <button onclick="prefillPostModal('{{ proj.output_video.url|default:'' }}', '{{ proj.title|escapejs }}', 'LYRIC_VIDEO', '{{ proj.pk }}')"
+                    class="w-full px-2 py-1.5 bg-zinc-100 hover:bg-white text-zinc-950 text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1">
+                    <i data-lucide="upload" class="w-3 h-3"></i> Post to TikTok
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <!-- ── Recent Jobs ───────────────────────────────────────────────────── -->
+    {% if recent_jobs %}
+    <div>
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold text-zinc-300 flex items-center gap-2">
+                <i data-lucide="history" class="w-4 h-4 text-zinc-400"></i> Recent TikTok Jobs
+            </h3>
+            <a href="{% url 'tiktok_monitor' %}" class="text-xs text-zinc-400 hover:text-white transition-colors flex items-center gap-1">
+                View all <i data-lucide="arrow-right" class="w-3 h-3"></i>
+            </a>
+        </div>
+        <div class="glass-panel rounded-2xl overflow-hidden">
+            <table class="w-full text-xs">
+                <thead>
+                    <tr class="border-b border-zinc-800 text-zinc-500 text-left">
+                        <th class="px-4 py-3 font-semibold">Caption / Title</th>
+                        <th class="px-4 py-3 font-semibold hidden md:table-cell">Account</th>
+                        <th class="px-4 py-3 font-semibold">Mode</th>
+                        <th class="px-4 py-3 font-semibold">Status</th>
+                        <th class="px-4 py-3 font-semibold hidden lg:table-cell">Posted</th>
+                        <th class="px-4 py-3 font-semibold text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-zinc-800/60">
+                    {% for job in recent_jobs %}
+                    <tr class="hover:bg-zinc-800/30 transition-colors" id="job-row-{{ job.pk }}">
+                        <td class="px-4 py-3">
+                            <div class="font-semibold text-white truncate max-w-[200px]">{{ job.title }}</div>
+                            {% if job.tiktok_share_url %}
+                            <a href="{{ job.tiktok_share_url }}" target="_blank" class="text-zinc-500 hover:text-zinc-300 flex items-center gap-1 mt-0.5">
+                                <i data-lucide="external-link" class="w-3 h-3"></i> View on TikTok
+                            </a>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 hidden md:table-cell text-zinc-400">
+                            {% if job.tiktok_account %}@{{ job.tiktok_account.display_name }}{% else %}—{% endif %}
+                        </td>
+                        <td class="px-4 py-3">
+                            {% if job.upload_engine == 'TIKTOK_INBOX' %}
+                            <span class="px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 text-[10px] font-semibold">Draft</span>
+                            {% else %}
+                            <span class="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-semibold">Direct</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="job-status-badge px-2 py-0.5 rounded-full text-[10px] font-semibold
+                                {% if job.status == 'SUCCESS' %}bg-emerald-500/15 text-emerald-400
+                                {% elif job.status == 'FAILED' %}bg-red-500/15 text-red-400
+                                {% elif job.status == 'CANCELLED' %}bg-zinc-700 text-zinc-400
+                                {% else %}bg-amber-500/15 text-amber-400{% endif %}">
+                                {{ job.get_status_display }}
+                            </span>
+                            {% if job.status in 'QUEUED UPLOADING PROCESSING' %}
+                            <div class="mt-1 w-24 bg-zinc-800 rounded-full h-1">
+                                <div class="bg-amber-400 h-1 rounded-full transition-all" style="width: {{ job.progress_percent }}%"></div>
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 hidden lg:table-cell text-zinc-500">{{ job.created_at|naturaltime }}</td>
+                        <td class="px-4 py-3">
+                            <div class="flex items-center justify-end gap-1">
+                                {% if job.status == 'FAILED' %}
+                                <form method="post" action="{% url 'tiktok_retry_job' job.pk %}" class="inline">
+                                    {% csrf_token %}
+                                    <button class="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-amber-400 transition-colors" title="Retry">
+                                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                                {% if job.status in 'QUEUED,UPLOADING,PROCESSING' %}
+                                <form method="post" action="{% url 'tiktok_cancel_job' job.pk %}" class="inline">
+                                    {% csrf_token %}
+                                    <button class="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-red-400 transition-colors" title="Cancel">
+                                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                                <form method="post" action="{% url 'tiktok_delete_job' job.pk %}" class="inline" onsubmit="return confirm('Delete this job record?')">
+                                    {% csrf_token %}
+                                    <button class="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-600 hover:text-red-400 transition-colors" title="Delete">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- ── Post Video Modal ──────────────────────────────────────────────────── -->
+<div id="postModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-start justify-center pt-10 p-4 overflow-y-auto">
+    <div class="bg-dark-900 border border-zinc-800 rounded-2xl w-full max-w-xl shadow-2xl my-4">
+        <div class="flex items-center justify-between p-5 border-b border-zinc-800">
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                <i data-lucide="upload-cloud" class="w-5 h-5 text-zinc-400"></i>
+                Post to TikTok
+            </h3>
+            <button onclick="closePostModal()" class="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 transition-colors">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+
+        <form id="postForm" method="post" action="{% url 'tiktok_create_job' %}" enctype="multipart/form-data" class="p-5 space-y-4">
+            {% csrf_token %}
+            <input type="hidden" name="tiktok_account_id" id="modal_account_id">
+            <input type="hidden" name="video_file_path" id="modal_video_file_path">
+            <input type="hidden" name="source_type" id="modal_source_type" value="CUSTOM_FILE">
+            <input type="hidden" name="source_id" id="modal_source_id">
+
+            <!-- Account indicator -->
+            <div id="modal_account_label" class="text-xs text-zinc-400 bg-zinc-900 rounded-xl px-3 py-2 border border-zinc-800 hidden">
+                Posting as: <span id="modal_account_name" class="text-white font-semibold"></span>
+            </div>
+
+            <!-- Title / Caption -->
+            <div>
+                <label class="block text-xs font-semibold text-zinc-300 mb-1.5">Caption <span class="text-zinc-500 font-normal">(shown on TikTok, max 2,200 chars)</span></label>
+                <input type="text" name="title" id="modal_title" maxlength="150" placeholder="Enter a catchy caption..."
+                    class="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-600 rounded-xl px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none transition-colors" required>
+            </div>
+
+            <!-- Description -->
+            <div>
+                <label class="block text-xs font-semibold text-zinc-300 mb-1.5">Description <span class="text-zinc-500 font-normal">(optional extra text)</span></label>
+                <textarea name="description" rows="2" placeholder="Add more context..."
+                    class="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-600 rounded-xl px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none resize-none transition-colors"></textarea>
+            </div>
+
+            <!-- Hashtags -->
+            <div>
+                <label class="block text-xs font-semibold text-zinc-300 mb-1.5">Hashtags <span class="text-zinc-500 font-normal">(comma separated, no #)</span></label>
+                <input type="text" name="tags" placeholder="fyp, music, viral, afrobeats"
+                    class="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-600 rounded-xl px-3 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none transition-colors">
+            </div>
+
+            <!-- Post Mode + Privacy -->
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-zinc-300 mb-1.5">Post Mode</label>
+                    <select name="upload_engine" id="modal_engine"
+                        class="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-600 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none transition-colors">
+                        <option value="TIKTOK_DIRECT">Direct Post (goes live)</option>
+                        <option value="TIKTOK_INBOX">Draft to Inbox</option>
+                    </select>
+                </div>
+                <div id="privacy_row">
+                    <label class="block text-xs font-semibold text-zinc-300 mb-1.5">Visibility</label>
+                    <select name="tiktok_privacy_level"
+                        class="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-600 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none transition-colors">
+                        {% for val, label in privacy_choices %}
+                        <option value="{{ val }}">{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Video file upload (shown if no studio file pre-selected) -->
+            <div id="file_upload_row">
+                <label class="block text-xs font-semibold text-zinc-300 mb-1.5">Video File <span class="text-zinc-500 font-normal">(MP4, max 4 GB)</span></label>
+                <input type="file" name="video_file" accept="video/mp4,video/*" id="modal_video_file_input"
+                    class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-zinc-300 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-zinc-700 file:text-zinc-200 hover:file:bg-zinc-600 transition-colors cursor-pointer">
+                <p id="prefilled_file_label" class="mt-1.5 text-xs text-emerald-400 hidden flex items-center gap-1">
+                    <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+                    <span id="prefilled_file_name"></span>
+                </p>
+            </div>
+
+            <!-- Interaction toggles -->
+            <div class="grid grid-cols-2 gap-x-6 gap-y-2" id="interaction_toggles">
+                <label class="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                    <input type="checkbox" name="disable_duet" class="w-3.5 h-3.5 rounded accent-zinc-400"> Disable Duet
+                </label>
+                <label class="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                    <input type="checkbox" name="disable_comment" class="w-3.5 h-3.5 rounded accent-zinc-400"> Disable Comments
+                </label>
+                <label class="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                    <input type="checkbox" name="disable_stitch" class="w-3.5 h-3.5 rounded accent-zinc-400"> Disable Stitch
+                </label>
+                <label class="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer">
+                    <input type="checkbox" name="branded_content" class="w-3.5 h-3.5 rounded accent-zinc-400"> Branded Content
+                </label>
+            </div>
+
+            <!-- Submit -->
+            <div class="flex items-center gap-3 pt-2 border-t border-zinc-800">
+                <button type="submit" id="modal_submit_btn"
+                    class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-100 hover:bg-white text-zinc-950 text-sm font-bold rounded-xl transition-colors">
+                    <i data-lucide="upload-cloud" class="w-4 h-4"></i>
+                    <span>Post to TikTok</span>
+                </button>
+                <button type="button" onclick="closePostModal()" class="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-sm font-semibold rounded-xl border border-zinc-800 transition-colors">
+                    Cancel
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+const postModal = document.getElementById('postModal');
+
+function openPostModal(accountId, accountName) {
+    document.getElementById('modal_account_id').value = accountId || '';
+    if (accountId && accountName) {
+        document.getElementById('modal_account_name').textContent = accountName;
+        document.getElementById('modal_account_label').classList.remove('hidden');
+    }
+    // Reset studio prefill
+    document.getElementById('modal_video_file_path').value = '';
+    document.getElementById('modal_source_type').value = 'CUSTOM_FILE';
+    document.getElementById('modal_source_id').value = '';
+    document.getElementById('modal_video_file_input').required = true;
+    document.getElementById('prefilled_file_label').classList.add('hidden');
+    postModal.classList.remove('hidden');
+    postModal.classList.add('flex');
+    lucide.createIcons();
+}
+
+function prefillPostModal(videoUrl, title, sourceType, sourceId) {
+    document.getElementById('modal_title').value = title;
+    document.getElementById('modal_source_type').value = sourceType;
+    document.getElementById('modal_source_id').value = sourceId;
+    // Convert URL to server path by stripping leading slash (the view handles it)
+    document.getElementById('modal_video_file_path').value = videoUrl;
+    document.getElementById('modal_video_file_input').required = false;
+    document.getElementById('prefilled_file_name').textContent = title;
+    document.getElementById('prefilled_file_label').classList.remove('hidden');
+    postModal.classList.remove('hidden');
+    postModal.classList.add('flex');
+    lucide.createIcons();
+}
+
+function closePostModal() {
+    postModal.classList.add('hidden');
+    postModal.classList.remove('flex');
+}
+
+// Hide interaction toggles when Inbox Draft mode is selected
+document.getElementById('modal_engine').addEventListener('change', function() {
+    const isDraft = this.value === 'TIKTOK_INBOX';
+    document.getElementById('interaction_toggles').style.opacity = isDraft ? '0.4' : '1';
+    document.getElementById('privacy_row').style.opacity = isDraft ? '0.4' : '1';
+});
+
+postModal.addEventListener('click', function(e) { if (e.target === postModal) closePostModal(); });
+
+// Live job status polling for active jobs
+const activeJobIds = [{% for j in active_jobs %}{{ j.pk }}{% if not forloop.last %},{% endif %}{% endfor %}];
+if (activeJobIds.length > 0) {
+    function pollJobs() {
+        fetch(`{% url 'tiktok_job_status_api' %}?ids=${activeJobIds.join(',')}`)
+            .then(r => r.json())
+            .then(data => {
+                data.jobs.forEach(j => {
+                    const badge = document.querySelector(`#job-row-${j.id} .job-status-badge`);
+                    if (badge) badge.textContent = j.status_display;
+                });
+            })
+            .catch(() => {});
+    }
+    setInterval(pollJobs, 5000);
+}
+</script>
+{% endblock %}

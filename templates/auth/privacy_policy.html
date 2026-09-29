@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy — YT Quid</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #09090b; color: #e4e4e7; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+        h2 { font-size: 1rem; font-weight: 700; color: #fff; margin-top: 2rem; margin-bottom: 0.5rem; }
+        p, li { font-size: 0.875rem; line-height: 1.75; color: #a1a1aa; }
+        ul { list-style: disc; padding-left: 1.5rem; margin-top: 0.5rem; }
+        li { margin-bottom: 0.25rem; }
+        a { color: #10b981; text-decoration: underline; }
+        a:hover { color: #34d399; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="border-b border-zinc-800 px-6 py-4 flex items-center justify-between">
+        <a href="/login/" class="flex items-center gap-3 group">
+            <div class="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
+                <svg class="w-4 h-4 text-emerald-400" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+            </div>
+            <span class="font-bold text-white text-sm tracking-tight group-hover:text-emerald-400 transition-colors">YT Quid</span>
+        </a>
+        <div class="flex items-center gap-4 text-xs text-zinc-500">
+            <a href="/legal/terms/" class="hover:text-zinc-200 transition-colors">Terms of Service</a>
+            <a href="/login/" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition-colors font-semibold">Sign In</a>
+        </div>
+    </header>
+
+    <!-- Content -->
+    <main class="flex-1 max-w-3xl mx-auto w-full px-6 py-12">
+
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-white tracking-tight">Privacy Policy</h1>
+            <p class="text-sm text-zinc-500 mt-2">Last updated: {{ last_updated|default:"January 1, 2025" }}</p>
+        </div>
+
+        <div class="space-y-1">
+
+            <h2>1. Overview</h2>
+            <p>YT Quid ("the App", "the Service") is an internal analytics and content publishing platform. This Privacy Policy explains what data is collected, how it is used, and how it is protected. By using the Service you agree to the practices described in this policy.</p>
+
+            <h2>2. Data We Collect</h2>
+            <p>The following categories of data are collected and stored by the Service:</p>
+            <ul>
+                <li><strong class="text-zinc-200">Account credentials</strong> — Username, hashed password, role, and profile information for internal user accounts.</li>
+                <li><strong class="text-zinc-200">OAuth tokens</strong> — Access tokens and refresh tokens issued by Google (YouTube) and TikTok when you authorise the app to act on your behalf. These are stored encrypted in the application database.</li>
+                <li><strong class="text-zinc-200">YouTube analytics data</strong> — Channel statistics, video metadata, view counts, subscriber counts, and revenue estimates fetched via the YouTube Data API v3 and stored for trend analysis.</li>
+                <li><strong class="text-zinc-200">TikTok account data</strong> — Display name, avatar URL, follower count, video count, and bio fetched from the TikTok API after you connect your account.</li>
+                <li><strong class="text-zinc-200">Published content metadata</strong> — Titles, descriptions, tags, upload timestamps, and platform video IDs for content published through the Service.</li>
+                <li><strong class="text-zinc-200">Uploaded media files</strong> — Video files and thumbnail images you upload for publishing. These are stored temporarily on the server and used only for the upload job.</li>
+                <li><strong class="text-zinc-200">Session data</strong> — Standard Django session cookies used to maintain your login state.</li>
+            </ul>
+
+            <h2>3. How We Use Your Data</h2>
+            <p>Collected data is used exclusively for the following purposes:</p>
+            <ul>
+                <li>Authenticating users and managing access control.</li>
+                <li>Displaying analytics dashboards and performance reports.</li>
+                <li>Publishing video content to YouTube and TikTok on your behalf.</li>
+                <li>Refreshing API tokens to maintain continuous integrations.</li>
+                <li>Generating revenue forecasts and milestone tracking.</li>
+            </ul>
+            <p>We do not sell, rent, or share your data with any third parties for advertising or commercial purposes.</p>
+
+            <h2>4. Google / YouTube API Data</h2>
+            <p>YT Quid uses the <a href="https://developers.google.com/youtube/v3" target="_blank" rel="noopener">YouTube Data API v3</a>. Our use of data obtained via the YouTube API complies with the <a href="https://developers.google.com/youtube/terms/api-services-terms-of-service" target="_blank" rel="noopener">YouTube API Services Terms of Service</a> and <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a>.</p>
+            <p>You may revoke YT Quid's access to your Google account at any time from your <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener">Google Account permissions page</a>, or directly within the app at <strong class="text-zinc-200">Publishing → Disconnect Channel</strong>.</p>
+
+            <h2>5. TikTok API Data</h2>
+            <p>YT Quid integrates with the <a href="https://developers.tiktok.com/doc/content-posting-api-get-started" target="_blank" rel="noopener">TikTok Content Posting API</a>. Data obtained from TikTok is used solely to display your account profile and track the status of videos you choose to publish through the Service. It is governed by <a href="https://www.tiktok.com/legal/privacy-policy" target="_blank" rel="noopener">TikTok's Privacy Policy</a>.</p>
+            <p>You may revoke YT Quid's access to your TikTok account at any time within the app at <strong class="text-zinc-200">TikTok Publishing → Disconnect Account</strong>.</p>
+
+            <h2>6. Data Retention</h2>
+            <p>OAuth tokens are retained for as long as the connected account remains active in the Service. They are immediately deleted when you disconnect an account. Analytics snapshots and job history records are retained indefinitely unless manually deleted by an administrator. Uploaded media files are retained on the server for the duration of the upload job and may be cleaned up by an administrator at any time.</p>
+
+            <h2>7. Data Security</h2>
+            <p>We implement the following measures to protect your data:</p>
+            <ul>
+                <li>All stored passwords are hashed using Django's default PBKDF2 algorithm.</li>
+                <li>OAuth tokens are stored in the application database, accessible only to authenticated administrators.</li>
+                <li>The Service is served over HTTPS in production environments.</li>
+                <li>Database access is restricted to the application server only.</li>
+            </ul>
+            <p>No method of transmission or storage is 100% secure. We cannot guarantee absolute security but commit to implementing reasonable protections.</p>
+
+            <h2>8. Cookies</h2>
+            <p>The Service uses a single session cookie (<code class="bg-zinc-800 px-1 rounded text-xs text-zinc-200">sessionid</code>) to keep you logged in. No third-party tracking cookies or advertising cookies are used.</p>
+
+            <h2>9. Your Rights</h2>
+            <p>As an authorised user of the Service, you may:</p>
+            <ul>
+                <li>View and update your profile information at any time from the Profile page.</li>
+                <li>Disconnect any linked YouTube or TikTok account, which will remove all associated OAuth tokens.</li>
+                <li>Request deletion of your user account and associated data by contacting a system administrator.</li>
+            </ul>
+
+            <h2>10. Children's Privacy</h2>
+            <p>The Service is intended for internal business use by adults only. We do not knowingly collect data from individuals under 16 years of age.</p>
+
+            <h2>11. Changes to This Policy</h2>
+            <p>This Privacy Policy may be updated from time to time. The date of the most recent revision is shown at the top of this page. Continued use of the Service following any changes constitutes acceptance of the updated policy.</p>
+
+            <h2>12. Contact</h2>
+            <p>If you have any questions about this Privacy Policy or wish to exercise your data rights, please contact the system administrator via the app's internal messaging or at the contact address configured for your deployment.</p>
+
+        </div>
+
+        <div class="mt-12 pt-6 border-t border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p class="text-xs text-zinc-600">© YT Quid. All rights reserved.</p>
+            <div class="flex items-center gap-4 text-xs">
+                <a href="/legal/terms/" class="text-zinc-500 hover:text-zinc-300 transition-colors">Terms of Service</a>
+                <a href="/login/" class="text-zinc-500 hover:text-zinc-300 transition-colors">Sign In</a>
+            </div>
+        </div>
+
+    </main>
+
+</body>
+</html>

@@ -36,7 +36,7 @@
     </div>
 
     <!-- Main Studio Form -->
-    <form method="POST" action="{% url 'lyrics_render' %}" enctype="multipart/form-data" id="lyricsForm">
+    <form method="POST" action="{% url 'lyrics_render' %}" enctype="multipart/form-data" id="lyricsForm" data-state-persistence="off">
         {% csrf_token %}
         <input type="hidden" name="lyrics_data" id="lyricsDataInput" value="[]">
 

@@ -104,3 +104,13 @@ def users_manage_view(request):
 
     users = User.objects.all()
     return render(request, 'auth/users.html', {'users': users})
+
+
+def terms_of_service_view(request):
+    """Public Terms of Service page — required by TikTok (and other OAuth providers)."""
+    return render(request, 'auth/terms_of_service.html')
+
+
+def privacy_policy_view(request):
+    """Public Privacy Policy page — required by TikTok (and other OAuth providers)."""
+    return render(request, 'auth/privacy_policy.html')

@@ -1,10 +1,12 @@
 import io
 import json
+import os
+import tempfile
 import wave
 import struct
 from unittest.mock import patch
 from PIL import Image
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -59,6 +61,22 @@ class ShortVideoProjectTestCase(TestCase):
         self.assertEqual(chops[2]['start_seconds'], 30.0)
         self.assertEqual(chops[2]['end_seconds'], 45.0)
 
+    def test_write_caption_srt_groups_words_with_clip_local_timestamps(self):
+        words = [
+            {'word': 'Hello', 'start': 0.2, 'end': 0.5},
+            {'word': 'there,', 'start': 0.5, 'end': 0.8},
+            {'word': 'welcome', 'start': 0.8, 'end': 1.2},
+            {'word': 'back!', 'start': 1.2, 'end': 1.6},
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            subtitle_path = os.path.join(temp_dir, 'captions.srt')
+            result = ShortsEngineService.write_caption_srt(words, 15.0, subtitle_path)
+            with open(result, encoding='utf-8') as subtitle_file:
+                srt = subtitle_file.read()
+
+        self.assertIn('00:00:00,200 --> 00:00:01,600', srt)
+        self.assertIn('Hello there, welcome back!', srt)
+
     def test_prepare_overlay_banner(self):
         for pos in ['TOP', 'CENTER', 'BOTTOM']:
             img = ShortsEngineService.prepare_overlay_banner(
@@ -77,8 +95,13 @@ class ShortVideoProjectTestCase(TestCase):
         response = self.client.get(reverse('shorts_maker'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Shorts Maker")
+        self.assertContains(response, "form_state.js")
         self.assertContains(response, "Interactive Timeline")
         self.assertContains(response, "Hook Banner Vertical Position")
+        self.assertContains(response, 'id="customSplitSeconds"')
+        self.assertContains(response, "autoSplitCustomChops()")
+        self.assertContains(response, "AI Fill All")
+        self.assertNotContains(response, "aiFillAllChops(true)")
 
     @patch.object(ShortsEngineService, 'render_video_chop')
     @patch.object(ShortsEngineService, 'inspect_media_duration', return_value=45.0)
@@ -87,7 +110,7 @@ class ShortVideoProjectTestCase(TestCase):
         dummy_video = SimpleUploadedFile("sample.mp4", b"fake mp4 video bytes", content_type="video/mp4")
 
         chops_payload = [
-            {"id": 1, "title": "Part 1", "hook_text": "Intro Hook", "hook_position": "TOP", "start_seconds": 0.0, "end_seconds": 15.0, "duration": 15.0},
+            {"id": 1, "title": "Part 1", "hook_text": "Intro Hook", "hook_position": "TOP", "start_seconds": 0.0, "end_seconds": 15.0, "duration": 15.0, "render_enabled": False},
             {"id": 2, "title": "Part 2", "hook_text": "Climax", "hook_position": "CENTER", "start_seconds": 15.0, "end_seconds": 30.0, "duration": 15.0},
         ]
 
@@ -105,9 +128,68 @@ class ShortVideoProjectTestCase(TestCase):
         project = ShortVideoProject.objects.filter(title='Viral Drum Solo').first()
         self.assertIsNotNone(project)
         self.assertEqual(project.render_status, ShortVideoProject.Status.COMPLETED)
-        self.assertEqual(project.chop_count, 2)
+        self.assertEqual(project.chop_count, 1)
+        self.assertEqual(project.chops_data[0]['id'], 2)
         self.assertEqual(project.hook_position, ShortVideoProject.HookPosition.BOTTOM)
-        self.assertEqual(mock_render_chop.call_count, 2)
+        self.assertEqual(mock_render_chop.call_count, 1)
+
+    def test_shorts_render_burns_auto_captions(self):
+        dummy_video = SimpleUploadedFile("sample.mp4", b"fake mp4 video bytes", content_type="video/mp4")
+        chops_payload = [
+            {"id": 1, "title": "Part 1", "start_seconds": 0.0, "end_seconds": 15.0, "duration": 15.0},
+        ]
+
+        with patch.object(ShortsEngineService, 'render_video_chop') as mock_render_chop, \
+                patch.object(ShortsEngineService, 'inspect_media_duration', return_value=15.0), \
+                patch.object(ShortsEngineService, 'transcribe_clip_captions', return_value='captions.srt') as mock_transcribe, \
+                patch('faster_whisper.WhisperModel') as mock_whisper:
+            response = self.client.post(reverse('shorts_render'), {
+                'title': 'Captioned Short',
+                'source_type': 'VIDEO',
+                'source_video': dummy_video,
+                'chops_json': json.dumps(chops_payload),
+                'auto_captions': '1',
+            }, follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        mock_whisper.assert_called_once_with('tiny', device='cpu', compute_type='int8')
+        mock_transcribe.assert_called_once()
+        self.assertEqual(mock_render_chop.call_args.kwargs['subtitle_path'], 'captions.srt')
+
+    def test_shorts_render_rejects_when_all_chops_are_unselected(self):
+        response = self.client.post(
+            reverse('shorts_render'),
+            {
+                'title': 'No Selected Clips',
+                'source_type': 'VIDEO',
+                'source_video': SimpleUploadedFile('sample.mp4', b'video', content_type='video/mp4'),
+                'chops_json': json.dumps([
+                    {'id': 1, 'start_seconds': 0, 'end_seconds': 15, 'render_enabled': False},
+                ]),
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(ShortVideoProject.objects.filter(title='No Selected Clips').exists())
+
+    def test_youtube_preview_serves_http_byte_ranges(self):
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            download_dir = os.path.join(media_root, 'studio', 'yt_downloads')
+            os.makedirs(download_dir)
+            with open(os.path.join(download_dir, 'preview.mp4'), 'wb') as media_file:
+                media_file.write(b'0123456789')
+
+            response = self.client.get(
+                reverse('shorts_yt_preview', kwargs={'filename': 'preview.mp4'}),
+                HTTP_RANGE='bytes=3-6',
+            )
+            response_body = b''.join(response.streaming_content)
+
+        self.assertEqual(response.status_code, 206)
+        self.assertEqual(response_body, b'3456')
+        self.assertEqual(response['Content-Range'], 'bytes 3-6/10')
+        self.assertEqual(response['Accept-Ranges'], 'bytes')
 
     def test_shorts_detail_and_delete_view(self):
         project = ShortVideoProject.objects.create(

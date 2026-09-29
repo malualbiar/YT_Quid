@@ -30,7 +30,7 @@
     </div>
 
     <!-- Main Chopper Studio Form -->
-    <form method="POST" action="{% url 'shorts_render' %}" enctype="multipart/form-data" id="shortsForm">
+    <form method="POST" action="{% url 'shorts_render' %}" enctype="multipart/form-data" id="shortsForm" data-state-persistence="off">
         {% csrf_token %}
         <input type="hidden" name="chops_json" id="chopsJsonInput" value="[]">
         <!-- YouTube URL metadata fields populated after yt-dlp download -->
@@ -219,6 +219,14 @@
                             <button type="button" onclick="autoSplitChops(60)" class="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700/60 text-xs font-semibold transition-colors">
                                 60s
                             </button>
+                            <label class="flex items-center gap-1 text-[10px] text-zinc-400">
+                                Custom
+                                <input type="number" id="customSplitSeconds" min="3" max="3600" step="1" value="45" aria-label="Custom clip length in seconds" class="w-16 bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-zinc-600">
+                                sec
+                            </label>
+                            <button type="button" onclick="autoSplitCustomChops()" class="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 text-xs font-semibold transition-colors">
+                                Split
+                            </button>
                             <button type="button" onclick="addNewChop()" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700/60 transition-colors">
                                 + Add Chop
                             </button>
@@ -265,6 +273,7 @@
                             <h4 class="text-xs font-bold text-zinc-300">
                                 Configured Chops (<span id="chopCountLabel">0</span>)
                             </h4>
+                            <span id="selectedChopCount" class="text-[10px] font-mono text-emerald-400">0 selected</span>
                             <div class="flex items-center gap-2">
                                 <!-- Tone selector -->
                                 <select id="aiToneSelect" class="bg-zinc-900 border border-zinc-800 rounded-lg px-2 py-1 text-[10px] text-zinc-300 focus:outline-none focus:border-violet-500/50">
@@ -496,9 +505,18 @@
                         <p class="text-xs text-zinc-400">Chops your media into individual 1080x1920 MP4 clips locally.</p>
                     </div>
 
-                    <button type="submit" id="renderShortsBtn" class="px-7 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded-xl transition-colors">
-                        <span id="btnSubmitText">Render Vertical Shorts</span>
-                    </button>
+                    <div class="flex flex-col items-start sm:items-end gap-1">
+                        <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                            <label class="flex items-center gap-2 text-xs font-semibold text-zinc-300 cursor-pointer">
+                                <input type="checkbox" name="auto_captions" id="autoCaptionsInput" value="1" class="accent-emerald-500">
+                                Auto captions
+                            </label>
+                            <button type="submit" id="renderShortsBtn" class="px-7 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded-xl transition-colors">
+                                <span id="btnSubmitText">Render Vertical Shorts</span>
+                            </button>
+                        </div>
+                        <p class="text-[10px] text-zinc-500">Local speech recognition; may add render time, especially on first use.</p>
+                    </div>
                 </div>
             </div>
 
@@ -595,6 +613,7 @@
     let chopsData = [];
     let activePreviewInterval = null;
     let currentActiveChopId = null;
+    let previewRequestId = 0;
 
     const DRAFT_KEY = 'yt_quid_shorts_draft';
 
@@ -977,6 +996,12 @@
 
     // Auto-Split Tool
     function autoSplitChops(interval) {
+        interval = Number(interval);
+        if (!Number.isFinite(interval) || interval < 3 || interval > 3600) {
+            AppToast.warning('Enter a custom clip length between 3 and 3600 seconds.');
+            return;
+        }
+
         const dur = Math.max(10, totalMediaDuration);
         const chops = [];
         let start = 0.0;
@@ -1017,6 +1042,10 @@
 
         chopsData = chops;
         renderAll();
+    }
+
+    function autoSplitCustomChops() {
+        autoSplitChops(document.getElementById('customSplitSeconds').value);
     }
 
     // Add Custom Chop
@@ -1113,7 +1142,7 @@
     }
 
     // Preview Single Chop in Video Player
-    function previewChop(idx) {
+    async function previewChop(idx) {
         const chop = chopsData[idx];
         if (!chop) return;
 
@@ -1123,9 +1152,54 @@
             return;
         }
 
+        const requestId = ++previewRequestId;
+        currentActiveChopId = null;
+        player.pause();
+
+        if (player.readyState < HTMLMediaElement.HAVE_METADATA) {
+            try {
+                await new Promise((resolve, reject) => {
+                    const onLoadedMetadata = () => {
+                        cleanup();
+                        resolve();
+                    };
+                    const onError = () => {
+                        cleanup();
+                        reject(new Error('Could not load the source video.'));
+                    };
+                    const cleanup = () => {
+                        player.removeEventListener('loadedmetadata', onLoadedMetadata);
+                        player.removeEventListener('error', onError);
+                    };
+                    player.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+                    player.addEventListener('error', onError, { once: true });
+                });
+            } catch (error) {
+                AppToast.error(error.message);
+                return;
+            }
+        }
+        if (requestId !== previewRequestId) return;
+
+        const targetTime = Math.max(0, Number(chop.start_seconds) || 0);
+        if (Math.abs(player.currentTime - targetTime) > 0.05) {
+            await new Promise(resolve => {
+                const onSeeked = () => {
+                    player.removeEventListener('seeked', onSeeked);
+                    resolve();
+                };
+                player.addEventListener('seeked', onSeeked, { once: true });
+                player.currentTime = targetTime;
+                if (!player.seeking && Math.abs(player.currentTime - targetTime) <= 0.05) {
+                    player.removeEventListener('seeked', onSeeked);
+                    resolve();
+                }
+            });
+        }
+        if (requestId !== previewRequestId) return;
+
         currentActiveChopId = chop.id;
-        player.currentTime = chop.start_seconds;
-        player.play();
+        player.play().catch(() => AppToast.warning('Press play on the video player to start this preview.'));
 
         activeChopBadgeText.textContent = `Previewing ${chop.title} (${chop.start_seconds}s - ${chop.end_seconds}s)`;
         activeChopBadge.classList.remove('hidden');
@@ -1282,6 +1356,8 @@
     function renderChopsList() {
         chopsListContainer.innerHTML = '';
         chopCountLabel.textContent = chopsData.length;
+        const selectedCount = chopsData.filter(chop => chop.render_enabled !== false).length;
+        document.getElementById('selectedChopCount').textContent = `${selectedCount} selected`;
 
         chopsData.forEach((chop, idx) => {
             const isPlaying = currentActiveChopId === chop.id;
@@ -1297,6 +1373,10 @@
                         <span class="w-6 h-6 rounded-lg ${isPlaying ? 'bg-zinc-700 text-white' : 'bg-zinc-800 text-zinc-300'} font-bold text-xs flex items-center justify-center">
                             ${chop.id}
                         </span>
+                        <label class="flex items-center gap-1 text-[10px] font-semibold text-zinc-400 cursor-pointer">
+                            <input type="checkbox" ${chop.render_enabled !== false ? 'checked' : ''} onchange="setChopRenderEnabled(${idx}, this.checked)" class="accent-emerald-500">
+                            Render
+                        </label>
                         <input type="text" value="${chop.title}" oninput="updateChop(${idx}, 'title', this.value)" onchange="updateChop(${idx}, 'title', this.value)" class="bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs font-bold text-white w-28 focus:outline-none focus:border-zinc-600">
                         <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-zinc-900 text-zinc-300 border border-zinc-800">
                             ${chop.duration}s
@@ -1371,6 +1451,14 @@
 
             chopsListContainer.appendChild(card);
         });
+    }
+
+    function setChopRenderEnabled(idx, isEnabled) {
+        if (!chopsData[idx]) return;
+        chopsData[idx].render_enabled = isEnabled;
+        renderChopsList();
+        syncJson();
+        saveDraft();
     }
 
     function syncJson() {
@@ -1607,8 +1695,7 @@
             timelineEndLabel.textContent = formatTime(totalMediaDuration);
 
             // Extract relative filename from absolute path
-            const filename = data.path.split(/[\\/]/).pop();
-            const mediaUrl = `/media/studio/yt_downloads/${encodeURIComponent(filename)}`;
+            const mediaUrl = data.preview_url;
 
             sourceVideoPlayer.src = mediaUrl;
             sourceVideoPlayer.classList.remove('hidden');
@@ -1623,10 +1710,7 @@
             syncJson();
             saveDraft();
 
-            // ✨ Feature 4: Auto-generate AI content now that we have YT metadata
-            setTimeout(() => aiFillAllChops(true), 800);
-
-            AppToast.success(`Loaded "${data.title}" (${durStr})! AI is generating hooks & descriptions...`);
+            AppToast.success(`Loaded "${data.title}" (${durStr})! Use AI Fill All when you're ready to generate hooks and titles.`);
 
         } catch (err) {
             clearInterval(fakeProgress);
@@ -1658,6 +1742,11 @@
         const isVideo = activeSourceMode === 'VIDEO';
         const isYtUrl = activeSourceMode === 'YT_URL';
         const isAudio = activeSourceMode === 'AUDIO_COVER';
+
+        if (!chopsData.some(chop => chop.render_enabled !== false)) {
+            AppToast.warning('Select at least one clip to render.');
+            return;
+        }
 
         if (isVideo && (!videoInput.files || !videoInput.files[0])) {
             AppToast.warning("Please select or upload a video file.");

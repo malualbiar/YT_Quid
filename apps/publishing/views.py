@@ -11,9 +11,11 @@ from django.contrib import messages
 from django.utils import timezone
 from django.urls import reverse
 
-from .models import YouTubeOAuthAccount, PublishingJob
+from .models import YouTubeOAuthAccount, TikTokAccount, PublishingJob
 from .services.oauth_service import YouTubeOAuthService
 from .services.uploader_service import YouTubeUploaderService
+from .services.tiktok_oauth_service import TikTokOAuthService
+from .services.tiktok_uploader_service import TikTokUploaderService
 
 from apps.studio.models import VideoProject, LongMixProject, ShortVideoProject, LyricVideoProject
 from apps.artists.models import YouTubeChannel
@@ -215,6 +217,9 @@ def create_job_view(request):
     embeddable = request.POST.get('embeddable', '1') in ['1', 'true', 'True', 'on']
 
     upload_engine = request.POST.get('upload_engine', PublishingJob.UploadEngine.API_V3)
+    source_type = request.POST.get('source_type', PublishingJob.SourceType.CUSTOM_FILE)
+    source_id = request.POST.get('source_id') or None
+    source_chop_index = request.POST.get('source_chop_index') or None
 
     account_id = request.POST.get('account_id')
     account = None
@@ -236,6 +241,24 @@ def create_job_view(request):
     # Resolve video file path
     video_file_path = request.POST.get('video_file_path', '').strip()
     uploaded_video = request.FILES.get('video_file')
+
+    if source_type == PublishingJob.SourceType.SHORT_VIDEO and source_id and source_chop_index is not None:
+        try:
+            project = ShortVideoProject.objects.get(pk=int(source_id))
+            chop_index = int(source_chop_index)
+            chops = project.chops_data or []
+            if 0 <= chop_index < len(chops):
+                output_file = chops[chop_index].get('output_file')
+                if output_file:
+                    video_file_path = os.path.join(
+                        settings.MEDIA_ROOT,
+                        'studio',
+                        'shorts_output',
+                        str(project.pk),
+                        os.path.basename(output_file),
+                    )
+        except (ShortVideoProject.DoesNotExist, TypeError, ValueError):
+            pass
     
     if uploaded_video:
         upload_dir = os.path.join(settings.MEDIA_ROOT, 'publishing', 'custom_videos')
@@ -280,10 +303,6 @@ def create_job_view(request):
                 publish_at = timezone.make_aware(publish_at, timezone.utc)
         except Exception as pe:
             logger.warning(f"Could not parse publish_at datetime '{publish_at_str}': {pe}")
-
-    source_type = request.POST.get('source_type', PublishingJob.SourceType.CUSTOM_FILE)
-    source_id = request.POST.get('source_id') or None
-    source_chop_index = request.POST.get('source_chop_index') or None
 
     job = PublishingJob.objects.create(
         account=account,
@@ -511,3 +530,352 @@ def dismiss_project_view(request, source_type, source_id):
     request.session.modified = True
 
     return redirect('publishing_dashboard')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TikTok Publishing Views
+# ─────────────────────────────────────────────────────────────────────────────
+
+@login_required
+def tiktok_dashboard_view(request):
+    """
+    TikTok Publishing dashboard — connect accounts, post videos, view recent jobs.
+    """
+    accounts = TikTokAccount.objects.all()
+    default_account = accounts.filter(is_default=True).first() or accounts.first()
+    is_configured = TikTokOAuthService.is_configured()
+
+    # Stats
+    tiktok_jobs = PublishingJob.objects.filter(platform=PublishingJob.Platform.TIKTOK)
+    total_jobs = tiktok_jobs.count()
+    completed_jobs = tiktok_jobs.filter(status=PublishingJob.Status.SUCCESS).count()
+    failed_jobs = tiktok_jobs.filter(status=PublishingJob.Status.FAILED).count()
+    active_jobs = tiktok_jobs.filter(
+        status__in=[PublishingJob.Status.QUEUED, PublishingJob.Status.UPLOADING, PublishingJob.Status.PROCESSING]
+    ).order_by('-created_at')
+
+    recent_jobs = tiktok_jobs.select_related('tiktok_account').order_by('-created_at')[:20]
+
+    # Studio projects ready to post
+    rendered_shorts = ShortVideoProject.objects.filter(
+        render_status=ShortVideoProject.Status.COMPLETED
+    ).order_by('-created_at')[:12]
+    rendered_loops = VideoProject.objects.filter(
+        render_status=VideoProject.Status.COMPLETED
+    ).order_by('-created_at')[:12]
+    rendered_mixes = LongMixProject.objects.filter(
+        render_status=LongMixProject.Status.COMPLETED
+    ).order_by('-created_at')[:12]
+    rendered_lyrics = LyricVideoProject.objects.filter(
+        render_status=LyricVideoProject.Status.COMPLETED
+    ).order_by('-created_at')[:12]
+
+    return render(request, 'publishing/tiktok_dashboard.html', {
+        'accounts': accounts,
+        'default_account': default_account,
+        'is_configured': is_configured,
+        'total_jobs': total_jobs,
+        'completed_jobs': completed_jobs,
+        'failed_jobs': failed_jobs,
+        'active_jobs': active_jobs,
+        'recent_jobs': recent_jobs,
+        'rendered_shorts': rendered_shorts,
+        'rendered_loops': rendered_loops,
+        'rendered_mixes': rendered_mixes,
+        'rendered_lyrics': rendered_lyrics,
+        'privacy_choices': PublishingJob.TikTokPrivacyLevel.choices,
+    })
+
+
+@login_required
+def tiktok_monitor_view(request):
+    """
+    TikTok Monitor — per-account video library and performance overview.
+    """
+    accounts = TikTokAccount.objects.all()
+    selected_open_id = request.GET.get('account', '')
+    selected_account = None
+    if selected_open_id:
+        selected_account = accounts.filter(open_id=selected_open_id).first()
+    if not selected_account:
+        selected_account = accounts.filter(is_default=True).first() or accounts.first()
+
+    status_filter = request.GET.get('status', 'ALL')
+    search_query = request.GET.get('q', '').strip()
+
+    jobs = PublishingJob.objects.filter(
+        platform=PublishingJob.Platform.TIKTOK
+    ).select_related('tiktok_account').order_by('-created_at')
+
+    if selected_account:
+        jobs = jobs.filter(tiktok_account=selected_account)
+
+    if status_filter != 'ALL' and status_filter in [c[0] for c in PublishingJob.Status.choices]:
+        jobs = jobs.filter(status=status_filter)
+
+    if search_query:
+        jobs = jobs.filter(title__icontains=search_query)
+
+    # Aggregate stats for the selected account
+    account_stats = {}
+    if selected_account:
+        account_jobs = PublishingJob.objects.filter(
+            platform=PublishingJob.Platform.TIKTOK,
+            tiktok_account=selected_account,
+        )
+        account_stats = {
+            'total': account_jobs.count(),
+            'live': account_jobs.filter(status=PublishingJob.Status.SUCCESS).count(),
+            'drafts': account_jobs.filter(
+                status=PublishingJob.Status.SUCCESS,
+                upload_engine=PublishingJob.UploadEngine.TIKTOK_INBOX,
+            ).count(),
+            'failed': account_jobs.filter(status=PublishingJob.Status.FAILED).count(),
+            'active': account_jobs.filter(
+                status__in=[PublishingJob.Status.QUEUED, PublishingJob.Status.UPLOADING, PublishingJob.Status.PROCESSING]
+            ).count(),
+        }
+
+    return render(request, 'publishing/tiktok_monitor.html', {
+        'accounts': accounts,
+        'selected_account': selected_account,
+        'jobs': jobs,
+        'account_stats': account_stats,
+        'status_filter': status_filter,
+        'search_query': search_query,
+        'status_choices': PublishingJob.Status.choices,
+    })
+
+
+@login_required
+def tiktok_oauth_connect_view(request):
+    """Starts TikTok OAuth 2.0 authorization flow."""
+    if not TikTokOAuthService.is_configured():
+        messages.error(request, "TikTok OAuth is not configured. Set TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET in your .env file.")
+        return redirect('tiktok_dashboard')
+
+    redirect_uri = request.build_absolute_uri(reverse('tiktok_oauth_callback'))
+    try:
+        auth_url = TikTokOAuthService.get_authorization_url(redirect_uri)
+        return redirect(auth_url)
+    except Exception as e:
+        logger.error(f"TikTok OAuth start error: {e}")
+        messages.error(request, f"Failed to start TikTok authorization: {e}")
+        return redirect('tiktok_dashboard')
+
+
+@login_required
+def tiktok_oauth_callback_view(request):
+    """Receives auth code from TikTok and registers the connected account."""
+    error = request.GET.get('error')
+    if error:
+        messages.error(request, f"TikTok authorization declined: {error}")
+        return redirect('tiktok_dashboard')
+
+    code = request.GET.get('code')
+    if not code:
+        messages.error(request, "No authorization code received from TikTok.")
+        return redirect('tiktok_dashboard')
+
+    redirect_uri = request.build_absolute_uri(reverse('tiktok_oauth_callback'))
+    try:
+        token_data = TikTokOAuthService.exchange_code_for_tokens(code, redirect_uri)
+        account = TikTokOAuthService.register_or_update_account(token_data)
+        messages.success(request, f"Connected TikTok account: @{account.display_name}!")
+    except Exception as e:
+        logger.error(f"TikTok OAuth callback error: {e}", exc_info=True)
+        messages.error(request, f"Failed to connect TikTok account: {e}")
+
+    return redirect('tiktok_dashboard')
+
+
+@login_required
+@require_POST
+def tiktok_oauth_disconnect_view(request, account_id):
+    """Disconnects and deletes a TikTok account."""
+    try:
+        name = TikTokOAuthService.disconnect_account(account_id)
+        messages.success(request, f"Disconnected TikTok account: @{name}.")
+    except Exception as e:
+        messages.error(request, f"Failed to disconnect: {e}")
+    return redirect('tiktok_dashboard')
+
+
+@login_required
+@require_POST
+def tiktok_set_default_view(request, account_id):
+    """Sets a TikTok account as the posting default."""
+    account = get_object_or_404(TikTokAccount, pk=account_id)
+    account.is_default = True
+    account.save()
+    messages.success(request, f"Set @{account.display_name} as default TikTok account.")
+    return redirect('tiktok_dashboard')
+
+
+@login_required
+@require_POST
+def tiktok_create_job_view(request):
+    """
+    Creates and queues a TikTok publishing job.
+    Accepts standard form POST or JSON AJAX.
+    """
+    is_ajax = (
+        request.headers.get('x-requested-with') == 'XMLHttpRequest'
+        or 'application/json' in request.headers.get('Accept', '')
+    )
+
+    # ── account ───────────────────────────────────────────────────────────────
+    account_id = request.POST.get('tiktok_account_id')
+    account = None
+    if account_id:
+        account = TikTokAccount.objects.filter(pk=account_id, is_active=True).first()
+    if not account:
+        account = (
+            TikTokAccount.objects.filter(is_default=True, is_active=True).first()
+            or TikTokAccount.objects.filter(is_active=True).first()
+        )
+    if not account:
+        err = "No TikTok account connected. Please connect an account first."
+        if is_ajax:
+            return JsonResponse({'success': False, 'error': err}, status=400)
+        messages.error(request, err)
+        return redirect('tiktok_dashboard')
+
+    # ── metadata ──────────────────────────────────────────────────────────────
+    title = request.POST.get('title', '').strip() or 'My TikTok Video'
+    description = request.POST.get('description', '').strip()
+    tags_raw = request.POST.get('tags', '')
+    if isinstance(tags_raw, list):
+        tags = tags_raw
+    else:
+        tags = [t.strip().lstrip('#') for t in tags_raw.replace('\n', ',').split(',') if t.strip()]
+
+    upload_engine = request.POST.get('upload_engine', PublishingJob.UploadEngine.TIKTOK_DIRECT)
+    if upload_engine not in [PublishingJob.UploadEngine.TIKTOK_DIRECT, PublishingJob.UploadEngine.TIKTOK_INBOX]:
+        upload_engine = PublishingJob.UploadEngine.TIKTOK_DIRECT
+
+    privacy_level = request.POST.get('tiktok_privacy_level', PublishingJob.TikTokPrivacyLevel.PUBLIC)
+    disable_duet = request.POST.get('disable_duet') in ['1', 'true', 'True', 'on']
+    disable_comment = request.POST.get('disable_comment') in ['1', 'true', 'True', 'on']
+    disable_stitch = request.POST.get('disable_stitch') in ['1', 'true', 'True', 'on']
+    branded_content = request.POST.get('branded_content') in ['1', 'true', 'True', 'on']
+
+    # ── video file ────────────────────────────────────────────────────────────
+    video_file_path = request.POST.get('video_file_path', '').strip()
+    uploaded_video = request.FILES.get('video_file')
+
+    if uploaded_video:
+        upload_dir = os.path.join(settings.MEDIA_ROOT, 'publishing', 'tiktok_videos')
+        os.makedirs(upload_dir, exist_ok=True)
+        dest_path = os.path.join(upload_dir, f"tt_{int(timezone.now().timestamp())}_{uploaded_video.name}")
+        with open(dest_path, 'wb+') as destination:
+            for chunk in uploaded_video.chunks():
+                destination.write(chunk)
+        video_file_path = dest_path
+
+    if not video_file_path or not os.path.exists(video_file_path):
+        err = f"Video file not found: {video_file_path}"
+        if is_ajax:
+            return JsonResponse({'success': False, 'error': err}, status=400)
+        messages.error(request, err)
+        return redirect('tiktok_dashboard')
+
+    source_type = request.POST.get('source_type', PublishingJob.SourceType.CUSTOM_FILE)
+    source_id = request.POST.get('source_id') or None
+
+    job = PublishingJob.objects.create(
+        platform=PublishingJob.Platform.TIKTOK,
+        tiktok_account=account,
+        upload_engine=upload_engine,
+        title=title,
+        description=description,
+        tags=tags,
+        tiktok_privacy_level=privacy_level,
+        tiktok_disable_duet=disable_duet,
+        tiktok_disable_comment=disable_comment,
+        tiktok_disable_stitch=disable_stitch,
+        tiktok_branded_content=branded_content,
+        video_file_path=video_file_path,
+        source_type=source_type,
+        source_id=int(source_id) if source_id else None,
+        status=PublishingJob.Status.QUEUED,
+    )
+
+    TikTokUploaderService.start_upload_async(job.id)
+
+    mode_label = "Draft (Inbox)" if upload_engine == PublishingJob.UploadEngine.TIKTOK_INBOX else "Direct Post"
+    success_msg = f"TikTok job queued for @{account.display_name} — {mode_label}."
+    if is_ajax:
+        return JsonResponse({
+            'success': True,
+            'job_id': job.id,
+            'message': success_msg,
+            'monitor_url': reverse('tiktok_monitor'),
+        })
+    messages.success(request, success_msg)
+    return redirect('tiktok_dashboard')
+
+
+@login_required
+@require_POST
+def tiktok_cancel_job_view(request, job_id):
+    """Cancels an active TikTok upload job."""
+    TikTokUploaderService.cancel_upload(job_id)
+    messages.info(request, f"TikTok job #{job_id} cancelled.")
+    return redirect(request.META.get('HTTP_REFERER') or 'tiktok_monitor')
+
+
+@login_required
+@require_POST
+def tiktok_retry_job_view(request, job_id):
+    """Retries a failed TikTok upload job."""
+    job = get_object_or_404(PublishingJob, pk=job_id, platform=PublishingJob.Platform.TIKTOK)
+    job.status = PublishingJob.Status.QUEUED
+    job.retry_count += 1
+    job.error_message = ''
+    job.progress_percent = 0
+    job.save(update_fields=['status', 'retry_count', 'error_message', 'progress_percent'])
+    TikTokUploaderService.start_upload_async(job.id)
+    messages.success(request, f"Retrying TikTok job for '{job.title}'...")
+    return redirect(request.META.get('HTTP_REFERER') or 'tiktok_monitor')
+
+
+@login_required
+@require_POST
+def tiktok_delete_job_view(request, job_id):
+    """Deletes a TikTok job record."""
+    job = get_object_or_404(PublishingJob, pk=job_id, platform=PublishingJob.Platform.TIKTOK)
+    job.delete()
+    messages.success(request, "TikTok job deleted.")
+    return redirect(request.META.get('HTTP_REFERER') or 'tiktok_monitor')
+
+
+@login_required
+@require_GET
+def tiktok_job_status_api(request):
+    """JSON polling endpoint for active TikTok upload jobs."""
+    job_ids_str = request.GET.get('ids', '')
+    if job_ids_str:
+        ids = [int(i) for i in job_ids_str.split(',') if i.isdigit()]
+        jobs = PublishingJob.objects.filter(id__in=ids, platform=PublishingJob.Platform.TIKTOK)
+    else:
+        jobs = PublishingJob.objects.filter(
+            platform=PublishingJob.Platform.TIKTOK,
+            status__in=[PublishingJob.Status.QUEUED, PublishingJob.Status.UPLOADING, PublishingJob.Status.PROCESSING],
+        )
+    data = []
+    for j in jobs:
+        data.append({
+            'id': j.id,
+            'title': j.title,
+            'status': j.status,
+            'status_display': j.get_status_display(),
+            'progress_percent': j.progress_percent,
+            'bytes_uploaded': j.bytes_uploaded,
+            'total_bytes': j.total_bytes,
+            'tiktok_publish_id': j.tiktok_publish_id,
+            'tiktok_video_id': j.tiktok_video_id,
+            'tiktok_share_url': j.tiktok_share_url,
+            'error_message': j.error_message,
+        })
+    return JsonResponse({'jobs': data})

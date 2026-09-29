@@ -1,8 +1,9 @@
 import os
 import json
+import tempfile
 from datetime import timedelta
 from unittest.mock import patch, MagicMock
-from django.test import TestCase, Client
+from django.test import TestCase, Client, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from django.contrib.auth import get_user_model
@@ -140,6 +141,40 @@ class PublishingAppTests(TestCase):
         self.assertEqual(job.privacy_status, 'private')
         self.assertEqual(job.account, self.oauth_account)
         mock_start_upload.assert_called_once_with(job.id)
+
+    @patch('apps.publishing.services.uploader_service.YouTubeUploaderService.start_upload_async')
+    def test_create_job_resolves_shorts_clip_path(self, mock_start_upload):
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            project = ShortVideoProject.objects.create(
+                title='YouTube source shorts',
+                chops_data=[
+                    {'output_file': 'part1.mp4', 'output_url': '/media/studio/shorts_output/1/part1.mp4'},
+                    {'output_file': 'part2.mp4', 'output_url': '/media/studio/shorts_output/1/part2.mp4'},
+                ],
+            )
+            output_dir = os.path.join(media_root, 'studio', 'shorts_output', str(project.pk))
+            os.makedirs(output_dir)
+            clip_path = os.path.join(output_dir, 'part2.mp4')
+            with open(clip_path, 'wb') as clip_file:
+                clip_file.write(b'short clip')
+
+            response = self.client.post(
+                reverse('publishing_create_job'),
+                {
+                    'title': 'Part 2',
+                    'account_id': self.oauth_account.id,
+                    'source_type': PublishingJob.SourceType.SHORT_VIDEO,
+                    'source_id': project.id,
+                    'source_chop_index': 1,
+                    'video_file_path': '/media/studio/shorts_output/1/part2.mp4',
+                },
+                HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            )
+
+            self.assertEqual(response.status_code, 200)
+            job = PublishingJob.objects.get(title='Part 2')
+            self.assertEqual(job.video_file_path, clip_path)
+            mock_start_upload.assert_called_once_with(job.id)
 
     @patch('apps.publishing.services.uploader_service.YouTubeUploaderService.start_upload_async')
     def test_batch_queue_shorts_view(self, mock_start_upload):

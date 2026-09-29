@@ -219,7 +219,7 @@
     </style>
     {% block extra_head %}{% endblock %}
 </head>
-<body class="bg-dark-950 text-zinc-100 font-sans antialiased h-screen overflow-hidden flex selection:bg-emerald-500 selection:text-black">
+<body data-user-id="{{ request.user.pk|default:'anonymous' }}" class="bg-dark-950 text-zinc-100 font-sans antialiased h-screen overflow-hidden flex selection:bg-emerald-500 selection:text-black">
     <script>
         (function () {
             try {
@@ -331,6 +331,16 @@
                 <a href="{% url 'publishing_queue' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'publishing_queue' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="list-ordered" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Queue &amp; History</span>
+                </a>
+
+                <a href="{% url 'tiktok_dashboard' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name in 'tiktok_dashboard,tiktok_monitor' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
+                    <i data-lucide="music-2" class="w-4 h-4 text-white shrink-0"></i>
+                    <span class="nav-text">TikTok Publishing</span>
+                </a>
+
+                <a href="{% url 'tiktok_monitor' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if request.resolver_match.url_name == 'tiktok_monitor' %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
+                    <i data-lucide="monitor" class="w-4 h-4 text-white shrink-0"></i>
+                    <span class="nav-text">TikTok Monitor</span>
                 </a>
 
                 <div class="sidebar-section-title pt-4 px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 transition-all duration-200">Intelligence</div>
@@ -806,6 +816,7 @@
     <script src="/static/js/daily_reminders.js"></script>
     <!-- Universal Popups, Modals & Toast Engine -->
     <script src="/static/js/app_dialogs.js"></script>
+    <script src="/static/js/form_state.js"></script>
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>
