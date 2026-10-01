@@ -6,7 +6,7 @@ from pathlib import Path
 import os
 import sys
 import dj_database_url
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 if getattr(sys, 'frozen', False):
     BASE_DIR = Path(getattr(sys, '_MEIPASS', os.path.dirname(sys.executable)))
@@ -216,4 +216,16 @@ TIKTOK_CLIENT_KEY = os.getenv('TIKTOK_CLIENT_KEY', '')
 TIKTOK_CLIENT_SECRET = os.getenv('TIKTOK_CLIENT_SECRET', '')
 
 # Gemini AI Content Generation
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '').strip()
+if not GEMINI_API_KEY:
+    GEMINI_API_KEY = str(dotenv_values(BASE_DIR / '.env').get('GEMINI_API_KEY') or '').strip()
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-3.5-flash')
+ANALYSIS_CHUNK_MINUTES = int(os.getenv('ANALYSIS_CHUNK_MINUTES', '10'))
+MAX_VIDEO_DURATION_SECONDS = int(os.getenv('MAX_VIDEO_DURATION_SECONDS', '7200'))
+MAX_ANALYSIS_VIDEO_SIZE_BYTES = int(os.getenv('MAX_ANALYSIS_VIDEO_SIZE_BYTES', str(2 * 1024 * 1024 * 1024)))
+MAX_ANALYSIS_CHUNKS = int(os.getenv('MAX_ANALYSIS_CHUNKS', '12'))
+MAX_CANDIDATE_MOMENTS = int(os.getenv('MAX_CANDIDATE_MOMENTS', '12'))
+VIRAL_MOMENT_MIN_GAP_SECONDS = float(os.getenv('VIRAL_MOMENT_MIN_GAP_SECONDS', '15'))
+ANALYSIS_BOUNDARY_OVERLAP_SECONDS = float(os.getenv('ANALYSIS_BOUNDARY_OVERLAP_SECONDS', '10'))
+VIRAL_CONTEXT_BEFORE_SECONDS = float(os.getenv('VIRAL_CONTEXT_BEFORE_SECONDS', '3'))
+VIRAL_CONTEXT_AFTER_SECONDS = float(os.getenv('VIRAL_CONTEXT_AFTER_SECONDS', '2'))

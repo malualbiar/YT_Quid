@@ -51,6 +51,9 @@ def ai_generate_view(request):
             yt_tags=context.get('yt_tags', []),
             chop_start=float(context.get('chop_start', 0)),
             chop_end=float(context.get('chop_end', 30)),
+            moment_description=context.get('moment_description', ''),
+            moment_reason=context.get('moment_reason', ''),
+            moment_category=context.get('moment_category', ''),
             tone=tone,
         )
 

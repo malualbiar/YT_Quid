@@ -195,6 +195,12 @@ class ShortVideoProject(models.Model):
         GLOW_NEON = 'GLOW_NEON', 'Cyber Neon Glow'
         CHILL_LOFI = 'CHILL_LOFI', 'Aesthetic Lo-Fi / Ambient'
 
+    class CaptionStyle(models.TextChoices):
+        BEAST_YELLOW = 'BEAST_YELLOW', 'MrBeast Yellow Highlight'
+        NEON_CYAN = 'NEON_CYAN', 'Cyber Neon Cyan'
+        FIRE_PUNCH = 'FIRE_PUNCH', 'Fire Punch Orange/Red'
+        CLEAN_WHITE = 'CLEAN_WHITE', 'Classic Bold White'
+
     class HookPosition(models.TextChoices):
         TOP = 'TOP', 'Top (Header Overlay)'
         CENTER = 'CENTER', 'Center (Focal Drop)'
@@ -236,6 +242,23 @@ class ShortVideoProject(models.Model):
     show_cta_badge = models.BooleanField(
         default=True,
         help_text='Show bottom "Full Video on YouTube" CTA pill'
+    )
+    caption_style = models.CharField(
+        max_length=30,
+        choices=CaptionStyle.choices,
+        default=CaptionStyle.BEAST_YELLOW
+    )
+    visual_progress_bar = models.BooleanField(
+        default=True,
+        help_text='Render animated bottom retention progress bar'
+    )
+    audio_normalize = models.BooleanField(
+        default=True,
+        help_text='Apply EBU R128 audio loudness normalization'
+    )
+    remove_pauses = models.BooleanField(
+        default=False,
+        help_text='Auto-remove silences and filler gaps (Step 8: tighten pacing)'
     )
 
     duration_seconds = models.FloatField(default=0.0)
@@ -286,6 +309,12 @@ class ShortVideoProject(models.Model):
         chops = self.chops_data or []
         chop = chops[chop_index] if chop_index < len(chops) else {}
         part_num = chop.get('id', chop_index + 1)
+        rendered_title = str(chop.get('title') or chop.get('ai_title') or '').strip()
+        part_label = f"Part {part_num}"
+        if rendered_title and rendered_title.lower() != part_label.lower():
+            title_clean = "".join(c for c in rendered_title if c.isalnum() or c in (' ', '_', '-')).strip().replace(' ', '_')
+            return f"{title_clean}.mp4" if title_clean else f"Short_{self.id}_Part_{part_num}.mp4"
+
         title_clean = "".join(c for c in self.title if c.isalnum() or c in (' ', '_', '-')).strip().replace(' ', '_')
         return f"{title_clean}_Part_{part_num}.mp4" if title_clean else f"Short_{self.id}_Part_{part_num}.mp4"
 
@@ -298,6 +327,12 @@ class ShortVideoProject(models.Model):
         chops = self.chops_data or []
         chop = chops[chop_index] if chop_index < len(chops) else {}
         part_label = f"Part {chop_index + 1}"
+        rendered_title = str(chop.get('title') or chop.get('ai_title', '')).strip()
+        if rendered_title and rendered_title.lower() != part_label.lower():
+            base_title = self.yt_video_title.strip() if self.yt_video_title else self.title
+            if rendered_title.lower() == str(base_title).lower():
+                return rendered_title[:100]
+            return f"{base_title} - {rendered_title}"[:100]
         hook = chop.get('hook_text', '').strip()
         # Use original YouTube video title if available, otherwise project title
         base_title = self.yt_video_title.strip() if self.yt_video_title else self.title
@@ -308,6 +343,13 @@ class ShortVideoProject(models.Model):
     def youtube_description_for_chop(self, chop_index=0):
         chops = self.chops_data or []
         chop = chops[chop_index] if chop_index < len(chops) else {}
+        ai_description = str(chop.get('ai_description', '')).strip()
+        if ai_description:
+            ai_tags = chop.get('ai_tags') or []
+            tags_line = ' '.join(str(tag).strip() for tag in ai_tags[:12] if str(tag).strip())
+            if tags_line and not all(tag in ai_description for tag in tags_line.split()):
+                return f'{ai_description}\n\n{tags_line}'
+            return ai_description
         part_label = f"Part {chop_index + 1}"
         start_sec = chop.get('start_seconds', 0.0)
         end_sec = chop.get('end_seconds', 0.0)
@@ -348,6 +390,53 @@ class ShortVideoProject(models.Model):
         desc_parts.append(tags_line)
 
         return '\n'.join(desc_parts)
+
+
+class ShortVideoAnalysis(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        ANALYZING = 'ANALYZING', 'Analyzing'
+        COMPLETED = 'COMPLETED', 'Completed'
+        FAILED = 'FAILED', 'Failed'
+
+    project = models.ForeignKey(ShortVideoProject, on_delete=models.CASCADE, related_name='viral_analyses')
+    model = models.CharField(max_length=100)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    video_summary = models.TextField(blank=True, default='')
+    video_duration = models.FloatField(default=0.0)
+    chunk_count = models.PositiveIntegerField(default=0)
+    completed_chunks = models.PositiveIntegerField(default=0)
+    error_message = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Analysis {self.pk} for Shorts project {self.project_id} ({self.status})'
+
+
+class ShortVideoMoment(models.Model):
+    analysis = models.ForeignKey(ShortVideoAnalysis, on_delete=models.CASCADE, related_name='moments')
+    start_seconds = models.FloatField()
+    end_seconds = models.FloatField()
+    title = models.CharField(max_length=180)
+    description = models.TextField(blank=True, default='')
+    category = models.CharField(max_length=60, default='other')
+    reason = models.TextField(blank=True, default='')
+    suggested_duration = models.FloatField(default=0.0)
+    score = models.PositiveSmallIntegerField(default=0)
+    score_components = models.JSONField(default=dict, blank=True)
+    needs_context = models.BooleanField(default=False)
+    thumbnail = models.ImageField(upload_to='studio/viral_moment_thumbnails/', blank=True)
+    selected = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['start_seconds', 'id']
+
+    def __str__(self):
+        return f'{self.title} ({self.start_seconds:.1f}-{self.end_seconds:.1f}s)'
 
 
 class LyricVideoProject(models.Model):

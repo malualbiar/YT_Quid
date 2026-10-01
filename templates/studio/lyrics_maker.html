@@ -36,7 +36,7 @@
     </div>
 
     <!-- Main Studio Form -->
-    <form method="POST" action="{% url 'lyrics_render' %}" enctype="multipart/form-data" id="lyricsForm" data-state-persistence="off">
+    <form method="POST" action="{% url 'lyrics_render' %}" enctype="multipart/form-data" id="lyricsForm" data-state-persistence="off" data-media-draft-key="yt_quid_lyrics_draft">
         {% csrf_token %}
         <input type="hidden" name="lyrics_data" id="lyricsDataInput" value="[]">
 
@@ -1166,6 +1166,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             if (confirmed) {
                 localStorage.removeItem(DRAFT_KEY);
+                await window.StudioMediaDrafts?.clear(DRAFT_KEY);
                 window.location.reload();
             }
         });
@@ -1390,6 +1391,7 @@ document.addEventListener('DOMContentLoaded', () => {
         removeReplacementAudioBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             videoReplaceAudioInput.value = '';
+            window.StudioMediaDrafts?.save(videoReplaceAudioInput.form);
             videoAudioSelected.classList.add('hidden');
             videoAudioSelected.classList.remove('flex');
             videoAudioEmpty.classList.remove('hidden');
@@ -3821,6 +3823,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 progressPercent.textContent = '100%';
                                 progressStep.textContent = 'Complete! Redirecting to video player...';
                                 localStorage.removeItem(DRAFT_KEY);
+                                await window.StudioMediaDrafts?.clear(DRAFT_KEY);
                                 setTimeout(() => {
                                     window.location.href = progData.redirect_url;
                                 }, 600);

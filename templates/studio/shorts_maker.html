@@ -30,9 +30,11 @@
     </div>
 
     <!-- Main Chopper Studio Form -->
-    <form method="POST" action="{% url 'shorts_render' %}" enctype="multipart/form-data" id="shortsForm" data-state-persistence="off">
+    <form method="POST" action="{% url 'shorts_render' %}" enctype="multipart/form-data" id="shortsForm" data-state-persistence="off" data-media-draft-key="yt_quid_shorts_draft">
         {% csrf_token %}
         <input type="hidden" name="chops_json" id="chopsJsonInput" value="[]">
+        <input type="hidden" name="viral_analysis_id" id="viralAnalysisIdInput" value="">
+        <input type="hidden" name="active_source_mode" id="activeSourceModeInput" value="VIDEO">
         <!-- YouTube URL metadata fields populated after yt-dlp download -->
         <input type="hidden" name="source_yt_url" id="hiddenYtUrl" value="">
         <input type="hidden" name="yt_video_title" id="hiddenYtTitle" value="">
@@ -196,6 +198,113 @@
                     </div>
                 </div>
 
+                <!-- 10-Stage Shorts Creation Pipeline Visualizer -->
+                <div class="p-4 rounded-2xl border border-zinc-800 bg-zinc-900/90 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center text-xs font-bold">⚡</span>
+                            <div>
+                                <h4 class="text-xs font-bold text-white tracking-wide uppercase">Automated Viral Shorts Pipeline</h4>
+                                <p class="text-[10px] text-zinc-400">Complete 10-step AI & FFmpeg engine from long video to viral 9:16 short</p>
+                            </div>
+                        </div>
+                        <span class="text-[10px] text-emerald-400 font-mono bg-emerald-950/60 px-2.5 py-1 rounded-full border border-emerald-800/40">10 Active Stages</span>
+                    </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[11px] pt-1">
+                        <div class="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-start gap-2">
+                            <span class="w-5 h-5 rounded-md bg-emerald-500/15 text-emerald-400 font-bold flex items-center justify-center shrink-0 text-[10px]">1</span>
+                            <div class="min-w-0"><span class="font-semibold text-zinc-200 block truncate">Extract</span><span class="text-[10px] text-zinc-500 truncate block">Audio & Frames</span></div>
+                        </div>
+                        <div class="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-start gap-2">
+                            <span class="w-5 h-5 rounded-md bg-emerald-500/15 text-emerald-400 font-bold flex items-center justify-center shrink-0 text-[10px]">2</span>
+                            <div class="min-w-0"><span class="font-semibold text-zinc-200 block truncate">Transcribe</span><span class="text-[10px] text-zinc-500 truncate block">Speech-to-Text</span></div>
+                        </div>
+                        <div class="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-start gap-2">
+                            <span class="w-5 h-5 rounded-md bg-emerald-500/15 text-emerald-400 font-bold flex items-center justify-center shrink-0 text-[10px]">3</span>
+                            <div class="min-w-0"><span class="font-semibold text-zinc-200 block truncate">Understand</span><span class="text-[10px] text-zinc-500 truncate block">Content & Speakers</span></div>
+                        </div>
+                        <div class="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-start gap-2">
+                            <span class="w-5 h-5 rounded-md bg-emerald-500/15 text-emerald-400 font-bold flex items-center justify-center shrink-0 text-[10px]">4</span>
+                            <div class="min-w-0"><span class="font-semibold text-zinc-200 block truncate">Score</span><span class="text-[10px] text-zinc-500 truncate block">Virality & Hooks</span></div>
+                        </div>
+                        <div class="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-start gap-2">
+                            <span class="w-5 h-5 rounded-md bg-emerald-500/15 text-emerald-400 font-bold flex items-center justify-center shrink-0 text-[10px]">5</span>
+                            <div class="min-w-0"><span class="font-semibold text-zinc-200 block truncate">Select</span><span class="text-[10px] text-zinc-500 truncate block">Best Short Clips</span></div>
+                        </div>
+                        <div class="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-start gap-2">
+                            <span class="w-5 h-5 rounded-md bg-emerald-500/15 text-emerald-400 font-bold flex items-center justify-center shrink-0 text-[10px]">6</span>
+                            <div class="min-w-0"><span class="font-semibold text-zinc-200 block truncate">Reframe</span><span class="text-[10px] text-zinc-500 truncate block">Vertical 9:16</span></div>
+                        </div>
+                        <div class="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-start gap-2">
+                            <span class="w-5 h-5 rounded-md bg-emerald-500/15 text-emerald-400 font-bold flex items-center justify-center shrink-0 text-[10px]">7</span>
+                            <div class="min-w-0"><span class="font-semibold text-zinc-200 block truncate">Captions</span><span class="text-[10px] text-zinc-500 truncate block">Kinetic Highlight</span></div>
+                        </div>
+                        <div class="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-start gap-2">
+                            <span class="w-5 h-5 rounded-md bg-emerald-500/15 text-emerald-400 font-bold flex items-center justify-center shrink-0 text-[10px]">8</span>
+                            <div class="min-w-0"><span class="font-semibold text-zinc-200 block truncate">Tighten</span><span class="text-[10px] text-zinc-500 truncate block">Cut Silence / Pauses</span></div>
+                        </div>
+                        <div class="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-start gap-2">
+                            <span class="w-5 h-5 rounded-md bg-emerald-500/15 text-emerald-400 font-bold flex items-center justify-center shrink-0 text-[10px]">9</span>
+                            <div class="min-w-0"><span class="font-semibold text-zinc-200 block truncate">Enhance</span><span class="text-[10px] text-zinc-500 truncate block">B-Roll, Bar & CTA</span></div>
+                        </div>
+                        <div class="p-2.5 rounded-xl bg-zinc-950 border border-zinc-800 flex items-start gap-2">
+                            <span class="w-5 h-5 rounded-md bg-emerald-500/15 text-emerald-400 font-bold flex items-center justify-center shrink-0 text-[10px]">10</span>
+                            <div class="min-w-0"><span class="font-semibold text-zinc-200 block truncate">Render</span><span class="text-[10px] text-zinc-500 truncate block">1080×1920 Short</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <section id="viralMomentFinder" class="p-5 rounded-2xl border border-emerald-900/70 bg-zinc-900 space-y-4"
+                    data-analyze-url="{% url 'shorts_viral_analyze' %}"
+                    data-status-url-template="{% url 'shorts_viral_analysis_status' 0 %}"
+                    data-review-url-template="{% url 'shorts_viral_analysis_review' 0 %}"
+                    data-model="{{ viral_model|escape }}"
+                    data-chunk-minutes="{{ viral_chunk_minutes }}"
+                    data-max-duration="{{ viral_max_duration }}"
+                    data-max-chunks="{{ viral_max_chunks }}"
+                    data-context-before="{{ viral_context_before }}"
+                    data-context-after="{{ viral_context_after }}">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                            <h3 class="text-sm font-bold text-white">AI Viral Moment Finder</h3>
+                            <p class="text-xs text-zinc-400 mt-1">AI-assisted Shorts Potential ranking. No moment is guaranteed to go viral.</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label class="text-[10px] text-zinc-400">Before
+                                <input id="viralContextBefore" type="number" min="0" max="10" step="1" value="{{ viral_context_before }}" class="w-12 ml-1 bg-zinc-950 border border-zinc-700 rounded px-1.5 py-1.5 text-center text-zinc-100" aria-label="Seconds of context before each moment">
+                            </label>
+                            <label class="text-[10px] text-zinc-400">After
+                                <input id="viralContextAfter" type="number" min="0" max="8" step="1" value="{{ viral_context_after }}" class="w-12 ml-1 bg-zinc-950 border border-zinc-700 rounded px-1.5 py-1.5 text-center text-zinc-100" aria-label="Seconds of context after each moment">
+                            </label>
+                            <button type="button" id="findViralMomentsBtn" onclick="startViralMomentAnalysis()" class="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold transition-colors">
+                                Find Viral Moments
+                            </button>
+                            <select id="priorViralAnalysisSelect" aria-label="Load a previous video analysis" class="max-w-48 bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-2 text-[11px] text-zinc-300">
+                                <option value="">Previous analyses</option>
+                                {% for item in viral_analyses %}
+                                <option value="{{ item.pk }}">{{ item.project.title|truncatechars:24 }} · {{ item.get_status_display }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <p id="viralAnalysisStatus" class="text-xs text-zinc-400" role="status">Model {{ viral_model }} · {{ viral_chunk_minutes }} minute segments · Up to {{ viral_max_chunks }} requests per analysis.</p>
+                    <div id="viralAnalysisProgress" class="hidden space-y-1.5">
+                        <div class="flex justify-between text-[11px] text-zinc-400"><span id="viralAnalysisProgressText">Preparing video...</span><span id="viralAnalysisProgressCount" class="font-mono">0/0</span></div>
+                        <div class="h-1.5 bg-zinc-800 rounded-full overflow-hidden"><div id="viralAnalysisProgressBar" class="h-full w-0 bg-emerald-400 transition-all"></div></div>
+                    </div>
+                    <div id="viralMomentResults" class="hidden space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800 pt-3">
+                            <div>
+                                <h4 id="viralMomentCount" class="text-xs font-bold text-white"></h4>
+                                <p id="viralVideoSummary" class="text-[11px] text-zinc-400 mt-1"></p>
+                            </div>
+                            <span class="text-[10px] text-zinc-500">Select suggestions below, then adjust their times in the timeline.</span>
+                        </div>
+                        <div id="viralMomentCards" class="space-y-2 max-h-[32rem] overflow-y-auto"></div>
+                    </div>
+                </section>
+
                 <!-- Step 2: Interactive Video Player & Timeline Chopper -->
                 <div class="p-6 rounded-2xl border border-zinc-800 bg-zinc-900 space-y-6">
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
@@ -224,7 +333,7 @@
                                 <input type="number" id="customSplitSeconds" min="3" max="3600" step="1" value="45" aria-label="Custom clip length in seconds" class="w-16 bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-zinc-600">
                                 sec
                             </label>
-                            <button type="button" onclick="autoSplitCustomChops()" class="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 text-xs font-semibold transition-colors">
+                            <button type="button" id="customSplitButton" class="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 text-xs font-semibold transition-colors">
                                 Split
                             </button>
                             <button type="button" onclick="addNewChop()" class="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-semibold border border-zinc-700/60 transition-colors">
@@ -498,43 +607,175 @@
                     </div>
                 </div>
 
-                <!-- Step 4: Render Action Button -->
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-zinc-900 rounded-2xl border border-zinc-800 gap-4">
-                    <div>
-                        <h4 class="text-sm font-bold text-white">Ready to Render Vertical Shorts</h4>
-                        <p class="text-xs text-zinc-400">Chops your media into individual 1080x1920 MP4 clips locally.</p>
+                <!-- Step 4: Caption Styles, Audio Mastering & Render Options -->
+                <div class="p-6 rounded-2xl border border-zinc-800 bg-zinc-900 space-y-5">
+                    <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-6 h-6 rounded-lg bg-zinc-800 text-zinc-200 font-bold text-xs flex items-center justify-center border border-zinc-700">4</span>
+                            <div>
+                                <h3 class="text-sm font-bold text-white">Dynamic Captions & Audio Mastering</h3>
+                                <p class="text-xs text-zinc-400">Retention-boosting animated word-by-word highlights and loudness mastering.</p>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="flex flex-col items-start sm:items-end gap-1">
-                        <div class="flex flex-col sm:flex-row sm:items-center gap-3">
-                            <label class="flex items-center gap-2 text-xs font-semibold text-zinc-300 cursor-pointer">
-                                <input type="checkbox" name="auto_captions" id="autoCaptionsInput" value="1" class="accent-emerald-500">
-                                Auto captions
-                            </label>
-                            <button type="submit" id="renderShortsBtn" class="px-7 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded-xl transition-colors">
-                                <span id="btnSubmitText">Render Vertical Shorts</span>
-                            </button>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <!-- Caption Enable & Styles -->
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <label class="flex items-center gap-2 text-xs font-bold text-white cursor-pointer">
+                                    <input type="checkbox" name="auto_captions" id="autoCaptionsInput" value="1" checked onchange="toggleCaptionOptions(this.checked)" class="accent-emerald-500 w-4 h-4 rounded">
+                                    <span>Animated Kinetic Captions</span>
+                                </label>
+                                <span class="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">Word-by-Word</span>
+                            </div>
+
+                            <div id="captionStyleOptionsContainer" class="space-y-2.5">
+                                <label class="block text-[11px] font-semibold text-zinc-400">Caption Highlight Animation Style</label>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <label class="flex items-center gap-2 p-2.5 rounded-xl border border-emerald-500/50 bg-zinc-950 cursor-pointer caption-style-card transition-all" data-style="BEAST_YELLOW">
+                                        <input type="radio" name="caption_style" value="BEAST_YELLOW" checked onchange="updateMockupCaptionStyle(this.value)" class="accent-emerald-500">
+                                        <div class="truncate">
+                                            <p class="text-xs font-bold text-yellow-400 truncate">MrBeast Yellow</p>
+                                            <p class="text-[9px] text-zinc-400">Active Gold Pop</p>
+                                        </div>
+                                    </label>
+
+                                    <label class="flex items-center gap-2 p-2.5 rounded-xl border border-zinc-800 bg-zinc-950 cursor-pointer caption-style-card transition-all hover:border-zinc-700" data-style="NEON_CYAN">
+                                        <input type="radio" name="caption_style" value="NEON_CYAN" onchange="updateMockupCaptionStyle(this.value)" class="accent-emerald-500">
+                                        <div class="truncate">
+                                            <p class="text-xs font-bold text-cyan-400 truncate">Cyber Cyan</p>
+                                            <p class="text-[9px] text-zinc-400">Electric Glow</p>
+                                        </div>
+                                    </label>
+
+                                    <label class="flex items-center gap-2 p-2.5 rounded-xl border border-zinc-800 bg-zinc-950 cursor-pointer caption-style-card transition-all hover:border-zinc-700" data-style="FIRE_PUNCH">
+                                        <input type="radio" name="caption_style" value="FIRE_PUNCH" onchange="updateMockupCaptionStyle(this.value)" class="accent-emerald-500">
+                                        <div class="truncate">
+                                            <p class="text-xs font-bold text-orange-400 truncate">Fire Punch</p>
+                                            <p class="text-[9px] text-zinc-400">Neon Red/Orange</p>
+                                        </div>
+                                    </label>
+
+                                    <label class="flex items-center gap-2 p-2.5 rounded-xl border border-zinc-800 bg-zinc-950 cursor-pointer caption-style-card transition-all hover:border-zinc-700" data-style="CLEAN_WHITE">
+                                        <input type="radio" name="caption_style" value="CLEAN_WHITE" onchange="updateMockupCaptionStyle(this.value)" class="accent-emerald-500">
+                                        <div class="truncate">
+                                            <p class="text-xs font-bold text-white truncate">Classic White</p>
+                                            <p class="text-[9px] text-zinc-400">Clean Stroke</p>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                <div id="captionSizeControl" class="flex items-center justify-between pt-1">
+                                    <span class="text-[11px] text-zinc-400">Font Size:</span>
+                                    <div class="flex items-center gap-2">
+                                        <input type="range" name="caption_font_size" id="captionFontSizeInput" min="32" max="96" step="4" value="64" oninput="document.getElementById('captionFontSizeValue').textContent = this.value; updateMockupPreview(0)" class="w-28 accent-emerald-500" aria-label="Auto caption font size">
+                                        <span id="captionFontSizeValue" class="w-8 text-right font-mono text-xs font-bold text-emerald-400">64</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <p class="text-[10px] text-zinc-500">Local speech recognition; may add render time, especially on first use.</p>
+
+                        <!-- Retention Bar & Audio Loudness -->
+                        <div class="space-y-3">
+                            <label class="block text-[11px] font-semibold text-zinc-400">Engagement & Audio Boosts</label>
+                            
+                            <!-- Visual Progress Bar Toggle -->
+                            <div class="flex items-center justify-between p-3 rounded-xl border border-zinc-800 bg-zinc-950">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                                        <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs font-bold text-white">Retention Progress Bar</p>
+                                        <p class="text-[10px] text-zinc-400">Animated bottom bar indicating clip duration.</p>
+                                    </div>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" name="visual_progress_bar" id="visualProgressBarInput" value="1" checked onchange="toggleMockupProgressBar(this.checked)" class="sr-only peer">
+                                    <div class="w-8 h-4.5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                </label>
+                            </div>
+
+                            <!-- Audio Loudness Normalization Toggle -->
+                            <div class="flex items-center justify-between p-3 rounded-xl border border-zinc-800 bg-zinc-950">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                                        <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs font-bold text-white">EBU R128 Audio Normalization</p>
+                                        <p class="text-[10px] text-zinc-400">Masters audio loudness to standard -14 LUFS.</p>
+                                    </div>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" name="audio_normalize" id="audioNormalizeInput" value="1" checked class="sr-only peer">
+                                    <div class="w-8 h-4.5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                </label>
+                            </div>
+
+                            <!-- Remove Pauses / Tighten Pacing Toggle (Step 8) -->
+                            <div class="flex items-center justify-between p-3 rounded-xl border border-zinc-800 bg-zinc-950">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                                        <i data-lucide="scissors" class="w-3.5 h-3.5"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs font-bold text-white">Remove Pauses & Tighten Pacing (Step 8)</p>
+                                        <p class="text-[10px] text-zinc-400">Auto-detects silence (>0.45s) and removes dead air for high viewer retention.</p>
+                                    </div>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" name="remove_pauses" id="removePausesInput" value="1" class="sr-only peer">
+                                    <div class="w-8 h-4.5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Render Action Button Bar -->
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between pt-4 border-t border-zinc-800 gap-4">
+                        <div>
+                            <h4 class="text-xs font-bold text-white">Render Final Vertical Shorts</h4>
+                            <p class="text-[11px] text-zinc-400">Generates individual 1080x1920 MP4 clips with dynamic styling & audio mastering.</p>
+                        </div>
+
+                        <button type="submit" id="renderShortsBtn" class="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded-xl shadow-lg shadow-emerald-500/20 transition-all transform hover:scale-[1.02]">
+                            <span id="btnSubmitText">Render Vertical Shorts</span>
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <!-- RIGHT COLUMN: Sticky 9:16 Video Preview Side Panel (lg:col-span-5 sticky top-6) -->
+            <!-- RIGHT COLUMN: Sticky 9:16 Video Preview Side Panel with Multi-Platform Safe-Zones (lg:col-span-5 sticky top-6) -->
             <div class="lg:col-span-5 sticky top-6 space-y-4">
                 <div class="flex flex-col items-center justify-center p-5 bg-zinc-900 rounded-2xl border border-zinc-800 shadow-xl">
                     <div class="text-center mb-3 flex items-center justify-between w-full px-1 border-b border-zinc-800/80 pb-2.5">
                         <div class="flex items-center gap-2">
                             <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                            <span class="text-xs font-bold text-white">Live 9:16 Phone Preview</span>
+                            <span class="text-xs font-bold text-white">Live 9:16 Preview</span>
                         </div>
                         <span id="previewAspectBadge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-950 text-emerald-400 border border-zinc-800 font-semibold">Blurred Fit</span>
                     </div>
 
+                    <!-- Platform Safe-Zone Guide Switcher -->
+                    <div class="w-full flex items-center justify-between bg-zinc-950 p-1.5 rounded-xl border border-zinc-800 mb-2">
+                        <span class="text-[10px] font-bold text-zinc-400 flex items-center gap-1 pl-1">
+                            <i data-lucide="shield-alert" class="w-3 h-3 text-emerald-400"></i>
+                            Safe Zone:
+                        </span>
+                        <div class="flex items-center gap-1">
+                            <button type="button" onclick="setSafeZoneGuide('none')" class="safe-zone-btn px-2 py-1 rounded-lg text-[10px] font-semibold bg-zinc-800 text-white transition-colors" data-zone="none">Off</button>
+                            <button type="button" onclick="setSafeZoneGuide('yt')" class="safe-zone-btn px-2 py-1 rounded-lg text-[10px] font-semibold text-zinc-400 hover:text-white transition-colors" data-zone="yt">Shorts</button>
+                            <button type="button" onclick="setSafeZoneGuide('tiktok')" class="safe-zone-btn px-2 py-1 rounded-lg text-[10px] font-semibold text-zinc-400 hover:text-white transition-colors" data-zone="tiktok">TikTok</button>
+                            <button type="button" onclick="setSafeZoneGuide('reels')" class="safe-zone-btn px-2 py-1 rounded-lg text-[10px] font-semibold text-zinc-400 hover:text-white transition-colors" data-zone="reels">Reels</button>
+                        </div>
+                    </div>
+
                     <!-- 9:16 Phone Frame Mockup -->
-                    <div class="w-[220px] h-[390px] bg-black rounded-[36px] border-[6px] border-zinc-800 shadow-2xl relative overflow-hidden p-2.5 my-2">
+                    <div class="w-[220px] h-[390px] bg-black rounded-[36px] border-[6px] border-zinc-800 shadow-2xl relative overflow-hidden p-2.5 my-1">
                         <!-- Top Speaker Notch -->
-                        <div class="w-16 h-3 bg-zinc-900 rounded-full mx-auto z-20 shrink-0 border border-zinc-800/60 relative"></div>
+                        <div class="w-16 h-3 bg-zinc-900 rounded-full mx-auto z-30 shrink-0 border border-zinc-800/60 relative"></div>
 
                         <!-- Dynamic Background Container -->
                         <div id="mockupBg" class="absolute inset-0 bg-zinc-900 flex items-center justify-center overflow-hidden transition-all">
@@ -551,19 +792,89 @@
                         </div>
 
                         <!-- Hook Pill (Dynamic Positioning: Top, Center, Bottom) -->
-                        <div id="mockupHookPill" class="z-10 w-full max-w-[170px] bg-zinc-950/90 border border-zinc-700 rounded-lg p-1.5 text-center shadow-lg transition-all duration-300 absolute top-7 left-1/2 -translate-x-1/2">
+                        <div id="mockupHookPill" class="z-20 w-full max-w-[170px] bg-zinc-950/90 border border-zinc-700 rounded-lg p-1.5 text-center shadow-lg transition-all duration-300 absolute top-7 left-1/2 -translate-x-1/2">
                             <span id="mockupHookTag" class="text-[7px] font-bold bg-zinc-800 text-zinc-200 px-1.5 py-0.5 rounded uppercase block mx-auto w-fit mb-0.5">PART 1</span>
                             <p id="mockupHookText" class="text-[8.5px] font-bold text-white leading-tight truncate">Wait for the drop... 🔥</p>
                         </div>
 
                         <!-- Bottom Watermark Pill -->
-                        <div id="mockupCtaPill" class="z-10 bg-zinc-950/80 border border-zinc-800 rounded-md px-2.5 py-1 text-center backdrop-blur-sm absolute bottom-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap">
+                        <div id="mockupCtaPill" class="z-20 bg-zinc-950/80 border border-zinc-800 rounded-md px-2.5 py-1 text-center backdrop-blur-sm absolute bottom-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap">
                             <p class="text-[8px] text-zinc-300 font-medium">▶ Full Video on YouTube</p>
+                        </div>
+
+                        <!-- Animated Kinetic Caption Preview -->
+                        <div id="mockupCaptionPreview" class="z-20 absolute bottom-14 left-3 right-3 text-center font-extrabold text-white leading-tight transition-all duration-300">
+                            <span class="text-[10px] tracking-wide" id="mockupCaptionWords">
+                                <span class="text-white">YOU WON'T</span> <span id="mockupCaptionActiveWord" class="text-[#00E5FF] bg-black/70 px-1 rounded shadow">BELIEVE</span> <span class="text-white">THIS!</span>
+                            </span>
+                        </div>
+
+                        <!-- Visual Progress Bar in Mockup -->
+                        <div id="mockupProgressBar" class="absolute bottom-0 left-0 right-0 h-1 bg-emerald-500 z-30 transition-all"></div>
+
+                        <!-- Interactive Platform Safe-Zone Overlay Guides -->
+                        <div id="safeZoneOverlay" class="hidden absolute inset-0 pointer-events-none z-25">
+                            <!-- Green Safe Placement Box -->
+                            <div class="absolute inset-x-3 top-12 bottom-20 border border-dashed border-emerald-400/60 rounded-xl flex items-center justify-center">
+                                <span class="text-[7px] font-mono font-bold bg-emerald-950/80 text-emerald-300 px-1 py-0.5 rounded border border-emerald-500/30 opacity-70">SAFE ZONE</span>
+                            </div>
+
+                            <!-- YouTube Shorts Platform UI Simulation -->
+                            <div id="ytSafeGuide" class="hidden absolute inset-0">
+                                <!-- Right Rail Buttons -->
+                                <div class="absolute right-1.5 bottom-12 flex flex-col items-center gap-2 text-white/70">
+                                    <div class="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[7px]">👍</div>
+                                    <div class="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[7px]">👎</div>
+                                    <div class="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[7px]">💬</div>
+                                    <div class="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[7px]">↗</div>
+                                    <div class="w-4 h-4 rounded-full bg-white/20 animate-spin text-[6px]">💿</div>
+                                </div>
+                                <!-- Bottom Details Bar -->
+                                <div class="absolute bottom-1.5 left-2 right-10 text-[7px] text-white/60 truncate">
+                                    <div class="font-bold">@ChannelName • Subscribe</div>
+                                    <div class="text-[6px] text-white/40 truncate">Title and tags live in this blocked zone</div>
+                                </div>
+                            </div>
+
+                            <!-- TikTok Platform UI Simulation -->
+                            <div id="tiktokSafeGuide" class="hidden absolute inset-0">
+                                <!-- Top Following/For You -->
+                                <div class="absolute top-4 inset-x-0 text-center text-[7px] text-white/60 font-bold">Following | <span class="text-white">For You</span></div>
+                                <!-- Right Rail -->
+                                <div class="absolute right-1.5 bottom-14 flex flex-col items-center gap-1.5 text-white/70">
+                                    <div class="w-4.5 h-4.5 rounded-full bg-rose-500/80 flex items-center justify-center text-[6px]">＋</div>
+                                    <div class="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[7px]">❤️</div>
+                                    <div class="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[7px]">💬</div>
+                                    <div class="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[7px]">🔖</div>
+                                    <div class="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[7px]">↗</div>
+                                </div>
+                                <!-- Bottom Caption -->
+                                <div class="absolute bottom-1.5 left-2 right-12 text-[7px] text-white/60">
+                                    <div class="font-bold">@creator</div>
+                                    <div class="text-[6px] text-white/40 truncate">TikTok caption & music ticker zone</div>
+                                </div>
+                            </div>
+
+                            <!-- Instagram Reels Platform UI Simulation -->
+                            <div id="reelsSafeGuide" class="hidden absolute inset-0">
+                                <!-- Right Rail -->
+                                <div class="absolute right-1.5 bottom-12 flex flex-col items-center gap-2 text-white/70">
+                                    <div class="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[7px]">❤️</div>
+                                    <div class="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[7px]">💬</div>
+                                    <div class="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[7px]">✈️</div>
+                                    <div class="w-4 h-4 rounded-full bg-white/20 flex items-center justify-center text-[7px]">⋯</div>
+                                </div>
+                                <!-- Bottom Account -->
+                                <div class="absolute bottom-1.5 left-2 right-10 text-[7px] text-white/60">
+                                    <div class="font-bold">user_name • Follow</div>
+                                    <div class="text-[6px] text-white/40 truncate">Reels caption & audio zone</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <p class="text-[10px] text-zinc-400 text-center mt-2 px-2">
-                        Real-time 9:16 crop, subject framing, aspect ratio, & typography style.
+                        Real-time 9:16 crop, safe zone overlays, kinetic captions, & audio mastering.
                     </p>
                 </div>
             </div>
@@ -614,6 +925,9 @@
     let activePreviewInterval = null;
     let currentActiveChopId = null;
     let previewRequestId = 0;
+    let viralAnalysisPollTimer = null;
+    let viralReviewSaveTimer = null;
+    let viralAnalysisData = null;
 
     const DRAFT_KEY = 'yt_quid_shorts_draft';
 
@@ -628,7 +942,10 @@
     const timelineTrack = document.getElementById('timelineTrack');
     const chopsListContainer = document.getElementById('chopsListContainer');
     const chopCountLabel = document.getElementById('chopCountLabel');
+    const customSplitSecondsInput = document.getElementById('customSplitSeconds');
     const chopsJsonInput = document.getElementById('chopsJsonInput');
+    const viralAnalysisIdInput = document.getElementById('viralAnalysisIdInput');
+    const viralMomentFinder = document.getElementById('viralMomentFinder');
     const projectTitle = document.getElementById('projectTitle');
     const cropFocalPercentInput = document.getElementById('cropFocalPercentInput');
 
@@ -644,12 +961,36 @@
     const draftStatusBanner = document.getElementById('draftStatusBanner');
     const draftStatusText = document.getElementById('draftStatusText');
     const clearDraftBtn = document.getElementById('clearDraftBtn');
+    const autoCaptionsInput = document.getElementById('autoCaptionsInput');
+    const captionFontSizeInput = document.getElementById('captionFontSizeInput');
+    const captionFontSizeValue = document.getElementById('captionFontSizeValue');
+    const captionSizeControl = document.getElementById('captionSizeControl');
+    const mockupCaptionPreview = document.getElementById('mockupCaptionPreview');
+
+    function updateCaptionPreview() {
+        const enabled = autoCaptionsInput.checked;
+        const fontSize = Number(captionFontSizeInput.value) || 30;
+        captionSizeControl.classList.toggle('hidden', !enabled);
+        captionSizeControl.classList.toggle('flex', enabled);
+        captionFontSizeValue.textContent = String(fontSize);
+        mockupCaptionPreview.classList.toggle('hidden', !enabled);
+        mockupCaptionPreview.style.fontSize = `${fontSize * (mockupBg.clientWidth / 1080)}px`;
+        mockupCaptionPreview.textContent = 'These captions will appear just like this';
+    }
 
     function formatTime(seconds) {
         const s = Math.max(0, Math.floor(seconds || 0));
+        const hours = Math.floor(s / 3600);
         const mins = Math.floor(s / 60);
         const secs = s % 60;
+        if (hours) return `${String(hours).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
         return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, char => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        })[char]);
     }
 
     function setFocalPercent(val) {
@@ -675,6 +1016,11 @@
                 timestamp: Date.now(),
                 title: projectTitle.value,
                 source_type: sourceTab ? sourceTab.getAttribute('data-source') : 'VIDEO',
+                yt_url: document.getElementById('ytUrlInput')?.value || '',
+                yt_meta: window._ytMeta || null,
+                auto_captions: autoCaptionsInput.checked,
+                caption_font_size: captionFontSizeInput.value,
+                custom_split_seconds: customSplitSecondsInput.value,
                 chopsData: chopsData,
                 aspect_mode: aspectRadio ? aspectRadio.value : 'BLURRED_FIT',
                 theme_style: themeRadio ? themeRadio.value : 'VIRAL_HOOK',
@@ -723,8 +1069,42 @@
             if (!draft) return;
 
             if (draft.title) projectTitle.value = draft.title;
+            if (draft.auto_captions !== undefined) autoCaptionsInput.checked = Boolean(draft.auto_captions);
+            if (draft.caption_font_size !== undefined) captionFontSizeInput.value = draft.caption_font_size;
+            if (draft.custom_split_seconds !== undefined) customSplitSecondsInput.value = draft.custom_split_seconds;
+            if (draft.source_type) {
+                document.querySelector(`.source-tab[data-source="${draft.source_type}"]`)?.click();
+            }
             if (draft.chopsData && Array.isArray(draft.chopsData) && draft.chopsData.length > 0) {
                 chopsData = draft.chopsData;
+            }
+            if (draft.yt_url) {
+                const ytUrlInput = document.getElementById('ytUrlInput');
+                if (ytUrlInput) ytUrlInput.value = draft.yt_url;
+            }
+            if (draft.yt_meta?.preview_url) {
+                window._ytMeta = draft.yt_meta;
+                const infoCard = document.getElementById('ytDownloadedInfo');
+                const titleEl = document.getElementById('ytDownloadedTitle');
+                const metaEl = document.getElementById('ytDownloadedMeta');
+                const tagsPreview = document.getElementById('ytFetchedTagsPreview');
+                const duration = Math.round(draft.yt_meta.duration || 0);
+                if (titleEl) titleEl.textContent = draft.yt_meta.title || 'YouTube Video';
+                if (metaEl) metaEl.textContent = `${Math.floor(duration / 60)}:${String(duration % 60).padStart(2, '0')} duration • Channel: ${draft.yt_meta.channel_name || 'YouTube'} • Best MP4`;
+                if (tagsPreview && draft.yt_meta.tags?.length) {
+                    tagsPreview.textContent = 'Tags: ' + draft.yt_meta.tags.slice(0, 10).map(tag => '#' + tag).join(' ');
+                    tagsPreview.classList.remove('hidden');
+                }
+                infoCard?.classList.remove('hidden');
+                totalMediaDuration = draft.yt_meta.duration || 60;
+                timelineEndLabel.textContent = formatTime(totalMediaDuration);
+                sourceVideoPlayer.src = draft.yt_meta.preview_url;
+                sourceVideoPlayer.classList.remove('hidden');
+                sourceAudioPlayer.classList.add('hidden');
+                playerPlaceholder.classList.add('hidden');
+                mockupVideoPreview.src = draft.yt_meta.preview_url;
+                mockupVideoPreview.classList.remove('hidden');
+                document.getElementById('mockupCenterContent')?.classList.add('hidden');
             }
             if (draft.crop_focal_percent !== undefined && cropFocalPercentInput) {
                 cropFocalPercentInput.value = draft.crop_focal_percent;
@@ -795,6 +1175,9 @@
             }
 
             renderAll();
+            syncJson();
+            updateCaptionPreview();
+            saveDraft();
             if (draftStatusBanner) {
                 draftStatusBanner.classList.remove('hidden');
                 draftStatusBanner.classList.add('flex');
@@ -817,12 +1200,23 @@
             });
             if (confirmed) {
                 localStorage.removeItem(DRAFT_KEY);
+                await window.StudioMediaDrafts?.clear(DRAFT_KEY);
                 window.location.reload();
             }
         });
     }
 
     if (projectTitle) projectTitle.addEventListener('input', saveDraft);
+    document.getElementById('ytUrlInput')?.addEventListener('input', saveDraft);
+    autoCaptionsInput.addEventListener('change', () => {
+        updateCaptionPreview();
+        saveDraft();
+    });
+    captionFontSizeInput.addEventListener('input', () => {
+        updateCaptionPreview();
+        saveDraft();
+    });
+    updateCaptionPreview();
 
     // Source Mode Radio Tabs
     document.querySelectorAll('.source-tab').forEach(tab => {
@@ -833,6 +1227,11 @@
             tab.className = "px-3 py-1 rounded-lg font-medium cursor-pointer transition-colors bg-zinc-800 text-white source-tab";
 
             const mode = tab.getAttribute('data-source');
+            if (mode !== 'VIDEO') {
+                viralAnalysisIdInput.value = '';
+                viralAnalysisData = null;
+                updateViralRenderAction();
+            }
             document.getElementById('videoSourceContainer').classList.add('hidden');
             document.getElementById('audioSourceContainer').classList.add('hidden');
             document.getElementById('ytUrlSourceContainer').classList.add('hidden');
@@ -864,6 +1263,9 @@
 
     videoInput.addEventListener('change', () => {
         if (videoInput.files && videoInput.files[0]) {
+            viralAnalysisIdInput.value = '';
+            viralAnalysisData = null;
+            updateViralRenderAction();
             const file = videoInput.files[0];
             videoFileName.textContent = file.name;
             const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
@@ -1002,6 +1404,17 @@
             return;
         }
 
+        const player = getActivePlayer();
+        const activeSourceMode = document.querySelector('.source-tab.bg-zinc-800')?.getAttribute('data-source');
+        const previewDuration = player && player.readyState >= HTMLMediaElement.HAVE_METADATA
+            ? Number(player.duration)
+            : activeSourceMode === 'YT_URL' ? Number(window._ytMeta?.duration) : NaN;
+        if (!Number.isFinite(previewDuration) || previewDuration <= 0) {
+            AppToast.warning('Load a media file and wait for its duration to appear before splitting.');
+            return;
+        }
+        totalMediaDuration = previewDuration;
+
         const dur = Math.max(10, totalMediaDuration);
         const chops = [];
         let start = 0.0;
@@ -1042,11 +1455,21 @@
 
         chopsData = chops;
         renderAll();
+        saveDraft();
     }
 
     function autoSplitCustomChops() {
-        autoSplitChops(document.getElementById('customSplitSeconds').value);
+        autoSplitChops(customSplitSecondsInput.valueAsNumber);
     }
+
+    document.getElementById('customSplitButton').addEventListener('click', autoSplitCustomChops);
+    customSplitSecondsInput.addEventListener('keydown', event => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            autoSplitCustomChops();
+        }
+    });
+    customSplitSecondsInput.addEventListener('change', saveDraft);
 
     // Add Custom Chop
     function addNewChop() {
@@ -1122,12 +1545,14 @@
             chop.duration = Math.round((chop.end_seconds - chop.start_seconds) * 10) / 10;
         } else {
             chop[field] = value;
+            if (field === 'title' && chop.ai_title) chop.ai_title = String(value).trim().slice(0, 180);
         }
 
         renderTimelineSegments();
         if (field === 'hook_position' || field === 'show_hook_banner') {
             renderChopsList();
         }
+        if (chop.moment_id) queueViralMomentReviewSave();
         updateMockupPreview(idx);
         syncJson();
         saveDraft();
@@ -1209,8 +1634,20 @@
         renderChopsList();
     }
 
+    function getSelectedPreviewIndex(fallbackIndex = 0) {
+        if (currentActiveChopId !== null) {
+            const activeIndex = chopsData.findIndex(chop => chop.id === currentActiveChopId);
+            if (activeIndex >= 0) return activeIndex;
+        }
+
+        const safeFallback = Number.isInteger(fallbackIndex) ? fallbackIndex : 0;
+        if (!chopsData.length) return 0;
+        return Math.min(Math.max(safeFallback, 0), chopsData.length - 1);
+    }
+
     function updateMockupPreview(idx) {
-        const chop = chopsData[idx || 0] || chopsData[0];
+        const previewIndex = getSelectedPreviewIndex(Number.isInteger(idx) ? idx : 0);
+        const chop = chopsData[previewIndex] || chopsData[0];
         if (chop) {
             mockupHookTag.textContent = chop.title ? chop.title.toUpperCase() : 'PART 1';
             mockupHookText.textContent = chop.hook_text || `${chop.title} 🔥`;
@@ -1343,7 +1780,7 @@
             seg.style.left = `${Math.min(100, Math.max(0, startPct))}%`;
             seg.style.width = `${Math.min(100, Math.max(2, durPct))}%`;
             seg.title = `${chop.title}: ${chop.start_seconds}s to ${chop.end_seconds}s (${chop.duration}s)`;
-            seg.innerHTML = `<span class="truncate px-1">${chop.title}</span>`;
+            seg.innerHTML = `<span class="truncate px-1">${escapeHtml(chop.title)}</span>`;
             seg.onclick = (e) => {
                 e.stopPropagation();
                 previewChop(idx);
@@ -1371,13 +1808,13 @@
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div class="flex items-center gap-2">
                         <span class="w-6 h-6 rounded-lg ${isPlaying ? 'bg-zinc-700 text-white' : 'bg-zinc-800 text-zinc-300'} font-bold text-xs flex items-center justify-center">
-                            ${chop.id}
+                            ${escapeHtml(chop.id)}
                         </span>
                         <label class="flex items-center gap-1 text-[10px] font-semibold text-zinc-400 cursor-pointer">
                             <input type="checkbox" ${chop.render_enabled !== false ? 'checked' : ''} onchange="setChopRenderEnabled(${idx}, this.checked)" class="accent-emerald-500">
                             Render
                         </label>
-                        <input type="text" value="${chop.title}" oninput="updateChop(${idx}, 'title', this.value)" onchange="updateChop(${idx}, 'title', this.value)" class="bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs font-bold text-white w-28 focus:outline-none focus:border-zinc-600">
+                        <input type="text" value="${escapeHtml(chop.title)}" oninput="updateChop(${idx}, 'title', this.value)" onchange="updateChop(${idx}, 'title', this.value)" class="bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs font-bold text-white w-28 focus:outline-none focus:border-zinc-600">
                         <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-zinc-900 text-zinc-300 border border-zinc-800">
                             ${chop.duration}s
                         </span>
@@ -1413,10 +1850,28 @@
                             </div>
                         </div>
                         <div class="flex items-center gap-1.5">
-                            <input id="hookInput_${idx}" type="text" value="${chop.hook_text || ''}" placeholder="${!isBannerOn ? '(Banner Disabled for this Clip)' : 'e.g. Wait for the drop... 🔥'}" ${!isBannerOn ? 'disabled' : ''} oninput="updateChop(${idx}, 'hook_text', this.value)" onchange="updateChop(${idx}, 'hook_text', this.value)" class="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 ${!isBannerOn ? 'opacity-40 cursor-not-allowed' : ''}">
+                            <input id="hookInput_${idx}" type="text" value="${escapeHtml(chop.hook_text || '')}" placeholder="${!isBannerOn ? '(Banner Disabled for this Clip)' : 'e.g. Wait for the drop...'}" ${!isBannerOn ? 'disabled' : ''} oninput="updateChop(${idx}, 'hook_text', this.value)" onchange="updateChop(${idx}, 'hook_text', this.value)" class="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 ${!isBannerOn ? 'opacity-40 cursor-not-allowed' : ''}">
+                            <button type="button" onclick="toggleHookFormulas(${idx})" title="Proven Viral Hook Formulas" class="shrink-0 flex items-center gap-1 px-2 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold transition-colors ${!isBannerOn ? 'opacity-30 pointer-events-none' : ''}">
+                                📋 Formula
+                            </button>
                             <button type="button" onclick="aiGenerateHook(${idx})" title="AI Generate Hook Options" class="shrink-0 flex items-center gap-1 px-2 py-1.5 rounded-lg bg-violet-600/20 hover:bg-violet-600/40 border border-violet-500/30 text-violet-300 text-[10px] font-bold transition-colors ${!isBannerOn ? 'opacity-30 pointer-events-none' : ''}">
                                 🪄 AI
                             </button>
+                        </div>
+                        <!-- Hook Formulas Quick Menu -->
+                        <div id="hookFormulaDropdown_${idx}" class="hidden mt-1.5 p-2 bg-zinc-950 border border-emerald-500/30 rounded-xl space-y-1 shadow-xl">
+                            <div class="flex items-center justify-between px-1 pb-1 border-b border-zinc-800">
+                                <p class="text-[9px] font-bold uppercase text-emerald-400">Proven Viral Hook Formulas:</p>
+                                <button type="button" onclick="toggleHookFormulas(${idx})" class="text-zinc-500 hover:text-zinc-300 text-[10px]">✕</button>
+                            </div>
+                            <div class="space-y-1 pt-1 max-h-48 overflow-y-auto">
+                                <button type="button" onclick="applyHookFormula(${idx}, 'You won\\'t believe what happened when... 🤯')" class="w-full text-left px-2 py-1.5 rounded-lg bg-zinc-900 hover:bg-emerald-500/20 text-[10px] text-zinc-200 truncate">⚡ <strong>Curiosity:</strong> You won't believe what happened... 🤯</button>
+                                <button type="button" onclick="applyHookFormula(${idx}, 'The #1 secret nobody tells you about this... 🤫')" class="w-full text-left px-2 py-1.5 rounded-lg bg-zinc-900 hover:bg-emerald-500/20 text-[10px] text-zinc-200 truncate">💡 <strong>Secret:</strong> The #1 secret nobody tells you... 🤫</button>
+                                <button type="button" onclick="applyHookFormula(${idx}, 'Stop scrolling! Why everyone is WRONG about this... ⚠️')" class="w-full text-left px-2 py-1.5 rounded-lg bg-zinc-900 hover:bg-emerald-500/20 text-[10px] text-zinc-200 truncate">🔥 <strong>Contrarian:</strong> Stop scrolling! Why everyone is WRONG... ⚠️</button>
+                                <button type="button" onclick="applyHookFormula(${idx}, 'Wait for the ending... I was NOT expecting that! 🔥')" class="w-full text-left px-2 py-1.5 rounded-lg bg-zinc-900 hover:bg-emerald-500/20 text-[10px] text-zinc-200 truncate">🎬 <strong>Dramatic:</strong> Wait for the ending... I was NOT expecting that! 🔥</button>
+                                <button type="button" onclick="applyHookFormula(${idx}, 'This is absolute perfection! Watch till the end 🔥')" class="w-full text-left px-2 py-1.5 rounded-lg bg-zinc-900 hover:bg-emerald-500/20 text-[10px] text-zinc-200 truncate">🚀 <strong>Hype:</strong> This is absolute perfection! Watch till the end 🔥</button>
+                                <button type="button" onclick="applyHookFormula(${idx}, 'Did you know about this? Let me explain... 👇')" class="w-full text-left px-2 py-1.5 rounded-lg bg-zinc-900 hover:bg-emerald-500/20 text-[10px] text-zinc-200 truncate">🎯 <strong>Question:</strong> Did you know about this? Let me explain... 👇</button>
+                            </div>
                         </div>
                         <!-- AI Hook Variant Dropdown -->
                         <div id="aiHookDropdown_${idx}" class="hidden mt-1.5 p-2 bg-zinc-950 border border-violet-500/30 rounded-xl space-y-1 shadow-xl">
@@ -1432,7 +1887,7 @@
                         <label class="text-[10px] font-bold uppercase text-zinc-500">Start (sec)</label>
                         <div class="flex items-center gap-1">
                             <button type="button" onclick="nudgeChop(${idx}, 'start_seconds', -0.5)" class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-mono">-0.5</button>
-                            <input type="number" step="0.1" min="0" value="${chop.start_seconds}" onchange="updateChop(${idx}, 'start_seconds', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs font-mono text-center text-white focus:outline-none">
+                            <input id="chopStart_${idx}" type="number" step="0.1" min="0" value="${chop.start_seconds}" onchange="updateChop(${idx}, 'start_seconds', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs font-mono text-center text-white focus:outline-none">
                             <button type="button" onclick="nudgeChop(${idx}, 'start_seconds', 0.5)" class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-mono">+0.5</button>
                         </div>
                     </div>
@@ -1442,7 +1897,7 @@
                         <label class="text-[10px] font-bold uppercase text-zinc-500">End (sec)</label>
                         <div class="flex items-center gap-1">
                             <button type="button" onclick="nudgeChop(${idx}, 'end_seconds', -0.5)" class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-mono">-0.5</button>
-                            <input type="number" step="0.1" min="0" value="${chop.end_seconds}" onchange="updateChop(${idx}, 'end_seconds', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs font-mono text-center text-white focus:outline-none">
+                            <input id="chopEnd_${idx}" type="number" step="0.1" min="0" value="${chop.end_seconds}" onchange="updateChop(${idx}, 'end_seconds', this.value)" class="w-full bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-xs font-mono text-center text-white focus:outline-none">
                             <button type="button" onclick="nudgeChop(${idx}, 'end_seconds', 0.5)" class="px-2 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-mono">+0.5</button>
                         </div>
                     </div>
@@ -1457,11 +1912,16 @@
         if (!chopsData[idx]) return;
         chopsData[idx].render_enabled = isEnabled;
         renderChopsList();
+        renderViralMomentCards();
+        queueViralMomentReviewSave();
+        updateViralRenderAction();
         syncJson();
         saveDraft();
     }
 
     function syncJson() {
+        const activeSourceTab = document.querySelector('.source-tab.bg-zinc-800');
+        document.getElementById('activeSourceModeInput').value = activeSourceTab?.getAttribute('data-source') || 'VIDEO';
         // Sync YouTube metadata hidden fields if a YT download was performed
         if (window._ytMeta) {
             const hUrl = document.getElementById('hiddenYtUrl');
@@ -1480,12 +1940,341 @@
         chopsJsonInput.value = JSON.stringify(chopsData);
     }
 
+    function renderViralMomentCards() {
+        const results = document.getElementById('viralMomentResults');
+        const container = document.getElementById('viralMomentCards');
+        if (!results || !container || !viralAnalysisData) return;
+        results.classList.remove('hidden');
+        container.replaceChildren();
+
+        const moments = chopsData.map((chop, index) => ({ chop, index })).filter(item => item.chop.moment_id);
+        document.getElementById('viralMomentCount').textContent = `${moments.length} potential moment${moments.length === 1 ? '' : 's'} found`;
+        document.getElementById('viralVideoSummary').textContent = viralAnalysisData.video_summary || '';
+
+        if (!moments.length) {
+            const empty = document.createElement('p');
+            empty.className = 'text-xs text-zinc-500 py-3';
+            empty.textContent = 'No suitable moments were returned for this video.';
+            container.appendChild(empty);
+            return;
+        }
+
+        moments.forEach(({ chop, index }) => {
+            const card = document.createElement('article');
+            card.className = 'grid grid-cols-[5rem_minmax(0,1fr)] sm:grid-cols-[7rem_minmax(0,1fr)] gap-3 p-3 rounded-xl border border-zinc-800 bg-zinc-950';
+
+            const thumbnail = document.createElement('img');
+            thumbnail.className = 'w-20 sm:w-28 aspect-[9/16] object-cover rounded-lg bg-zinc-900';
+            thumbnail.alt = '';
+            thumbnail.loading = 'lazy';
+            if (chop.thumbnail_url) thumbnail.src = chop.thumbnail_url;
+            else thumbnail.classList.add('invisible');
+            card.appendChild(thumbnail);
+
+            const content = document.createElement('div');
+            content.className = 'min-w-0 space-y-1.5';
+            const heading = document.createElement('div');
+            heading.className = 'flex flex-wrap items-center gap-2';
+            const title = document.createElement('h5');
+            title.className = 'text-xs font-bold text-white';
+            title.textContent = chop.title;
+            const score = document.createElement('span');
+            score.className = 'text-[10px] font-semibold text-emerald-300';
+            score.textContent = `Shorts Potential: ${chop.shorts_score}/100`;
+            heading.append(title, score);
+            content.appendChild(heading);
+
+            const timing = document.createElement('p');
+            timing.className = 'text-[11px] font-mono text-zinc-300';
+            timing.textContent = `${formatTime(chop.start_seconds)} → ${formatTime(chop.end_seconds)} · ${Math.round(chop.end_seconds - chop.start_seconds)} sec · ${chop.category}`;
+            content.appendChild(timing);
+
+            const description = document.createElement('p');
+            description.className = 'text-[11px] text-zinc-400';
+            description.textContent = chop.description;
+            content.appendChild(description);
+
+            const reason = document.createElement('p');
+            reason.className = 'text-[11px] text-zinc-500';
+            reason.textContent = chop.reason;
+            content.appendChild(reason);
+            if (chop.needs_context) {
+                const contextNote = document.createElement('p');
+                contextNote.className = 'text-[10px] text-amber-300';
+                contextNote.textContent = 'May need context before or after this moment.';
+                content.appendChild(contextNote);
+            }
+
+            const actions = document.createElement('div');
+            actions.className = 'flex flex-wrap items-center gap-3 pt-1';
+            const selectLabel = document.createElement('label');
+            selectLabel.className = 'flex items-center gap-1.5 text-[11px] text-zinc-300';
+            const select = document.createElement('input');
+            select.type = 'checkbox';
+            select.checked = chop.render_enabled !== false;
+            select.className = 'accent-emerald-500';
+            select.setAttribute('aria-label', `Select ${chop.title} for clip creation`);
+            select.addEventListener('change', () => setChopRenderEnabled(index, select.checked));
+            selectLabel.append(select, document.createTextNode('Create Clip'));
+            actions.appendChild(selectLabel);
+
+            const preview = document.createElement('button');
+            preview.type = 'button';
+            preview.className = 'text-[11px] font-semibold text-emerald-300 hover:text-emerald-200';
+            preview.textContent = 'Preview';
+            preview.addEventListener('click', () => previewChop(index));
+            actions.appendChild(preview);
+
+            const edit = document.createElement('button');
+            edit.type = 'button';
+            edit.className = 'text-[11px] font-semibold text-zinc-300 hover:text-white';
+            edit.textContent = 'Edit';
+            edit.addEventListener('click', () => {
+                renderChopsList();
+                const input = document.getElementById(`chopStart_${index}`);
+                input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                input?.focus();
+            });
+            actions.appendChild(edit);
+            content.appendChild(actions);
+
+            const factorDetails = document.createElement('details');
+            factorDetails.className = 'text-[10px] text-zinc-500 pt-1';
+            const factorSummary = document.createElement('summary');
+            factorSummary.className = 'cursor-pointer hover:text-zinc-300';
+            factorSummary.textContent = 'Scoring factors';
+            const factorList = document.createElement('p');
+            factorList.className = 'mt-1 leading-relaxed';
+            factorList.textContent = Object.entries(chop.score_components || {})
+                .map(([key, value]) => `${key.replaceAll('_', ' ')} ${value}/10`).join(' · ');
+            factorDetails.append(factorSummary, factorList);
+            content.appendChild(factorDetails);
+            card.appendChild(content);
+            container.appendChild(card);
+        });
+    }
+
+    function updateViralRenderAction() {
+        const label = document.getElementById('btnSubmitText');
+        if (!label) return;
+        if (!viralAnalysisIdInput.value) {
+            label.textContent = 'Render Vertical Shorts';
+            return;
+        }
+        const selectedCount = chopsData.filter(chop => chop.moment_id && chop.render_enabled !== false).length;
+        label.textContent = selectedCount ? `Create Selected Clips (${selectedCount})` : 'Select Moments to Create';
+    }
+
     function renderAll() {
         renderTimelineSegments();
         renderChopsList();
+        renderViralMomentCards();
         syncJson();
-        updateMockupPreview(0);
+        updateMockupPreview(getSelectedPreviewIndex(0));
+        updateViralRenderAction();
     }
+
+    function viralStatusUrl(analysisId) {
+        return viralMomentFinder.dataset.statusUrlTemplate.replace('/0/status/', `/${analysisId}/status/`);
+    }
+
+    function queueViralMomentReviewSave() {
+        if (!viralAnalysisIdInput.value) return;
+        if (viralReviewSaveTimer) clearTimeout(viralReviewSaveTimer);
+        viralReviewSaveTimer = setTimeout(async () => {
+            const moments = chopsData.filter(chop => chop.moment_id).map(chop => ({
+                id: chop.moment_id,
+                start_seconds: chop.start_seconds,
+                end_seconds: chop.end_seconds,
+                title: chop.title,
+                selected: chop.render_enabled !== false,
+            }));
+            try {
+                const reviewUrl = viralMomentFinder.dataset.reviewUrlTemplate.replace('/0/review/', `/${viralAnalysisIdInput.value}/review/`);
+                const response = await fetch(reviewUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || '',
+                    },
+                    body: JSON.stringify({ moments }),
+                });
+                if (!response.ok) throw new Error('Could not save moment review changes.');
+            } catch (error) {
+                document.getElementById('viralAnalysisStatus').textContent = error.message;
+            }
+        }, 450);
+    }
+
+    function showViralAnalysisProgress(analysis) {
+        const progress = document.getElementById('viralAnalysisProgress');
+        const progressText = document.getElementById('viralAnalysisProgressText');
+        const progressCount = document.getElementById('viralAnalysisProgressCount');
+        const progressBar = document.getElementById('viralAnalysisProgressBar');
+        progress.classList.remove('hidden');
+        progressText.textContent = analysis.status === 'PENDING' ? 'Waiting to analyze...' : `Analyzing segment ${analysis.completed_chunks} of ${analysis.chunk_count}...`;
+        progressCount.textContent = `${analysis.completed_chunks}/${analysis.chunk_count}`;
+        progressBar.style.width = `${analysis.chunk_count ? Math.round(analysis.completed_chunks * 100 / analysis.chunk_count) : 0}%`;
+    }
+
+    function applyViralAnalysis(analysis) {
+        viralAnalysisData = analysis;
+        viralAnalysisIdInput.value = analysis.analysis_id;
+        currentActiveChopId = null;
+        if (analysis.project_title) projectTitle.value = analysis.project_title;
+        if (analysis.video_url && (!sourceVideoPlayer.src || sourceVideoPlayer.src !== new URL(analysis.video_url, window.location.href).href)) {
+            sourceVideoPlayer.src = analysis.video_url;
+            sourceVideoPlayer.load(); // Required: tells browser to load the new src so seeking works
+            sourceVideoPlayer.classList.remove('hidden');
+            sourceAudioPlayer.classList.add('hidden');
+            playerPlaceholder.classList.add('hidden');
+            mockupVideoPreview.src = analysis.video_url;
+            mockupVideoPreview.load();
+            mockupVideoPreview.classList.remove('hidden');
+            document.getElementById('mockupCenterContent')?.classList.add('hidden');
+            sourceVideoPlayer.onloadedmetadata = () => {
+                totalMediaDuration = analysis.video_duration || sourceVideoPlayer.duration || totalMediaDuration;
+                timelineEndLabel.textContent = formatTime(totalMediaDuration);
+            };
+        }
+        totalMediaDuration = analysis.video_duration || totalMediaDuration;
+        timelineEndLabel.textContent = formatTime(totalMediaDuration);
+        const paddingBefore = Math.max(0, Math.min(10, Number(document.getElementById('viralContextBefore').value) || 0));
+        const paddingAfter = Math.max(0, Math.min(8, Number(document.getElementById('viralContextAfter').value) || 0));
+        chopsData = (analysis.moments || []).map((moment, index) => ({
+            id: index + 1,
+            moment_id: moment.id,
+            title: moment.title,
+            hook_text: '',
+            start_seconds: Math.max(0, moment.start_seconds - paddingBefore),
+            end_seconds: Math.min(analysis.video_duration, moment.end_seconds + paddingAfter),
+            duration: Math.round((Math.min(analysis.video_duration, moment.end_seconds + paddingAfter) - Math.max(0, moment.start_seconds - paddingBefore)) * 10) / 10,
+            render_enabled: moment.selected === true,
+            show_hook_banner: false,
+            shorts_score: moment.score,
+            score_components: moment.score_components,
+            description: moment.description,
+            category: moment.category,
+            reason: moment.reason,
+            needs_context: moment.needs_context,
+            thumbnail_url: moment.thumbnail_url,
+        }));
+        renderAll();
+        document.getElementById('viralAnalysisProgress').classList.add('hidden');
+        document.getElementById('viralAnalysisStatus').textContent = `${chopsData.length} potential moment${chopsData.length === 1 ? '' : 's'} · ${analysis.model} · select clips to render.`;
+        document.getElementById('priorViralAnalysisSelect').value = String(analysis.analysis_id);
+    }
+
+    async function pollViralAnalysis(analysisId) {
+        try {
+            const response = await fetch(viralStatusUrl(analysisId));
+            const analysis = await response.json();
+            if (!response.ok || !analysis.success) throw new Error(analysis.error || 'Could not load analysis status.');
+            if (analysis.status === 'COMPLETED') {
+                if (viralAnalysisPollTimer) clearTimeout(viralAnalysisPollTimer);
+                applyViralAnalysis(analysis);
+                return;
+            }
+            if (analysis.status === 'FAILED') {
+                if (viralAnalysisPollTimer) clearTimeout(viralAnalysisPollTimer);
+                document.getElementById('viralAnalysisProgress').classList.add('hidden');
+                document.getElementById('viralAnalysisStatus').textContent = analysis.error || 'Analysis failed. Please try again.';
+                AppToast.error(analysis.error || 'Video analysis failed.');
+                return;
+            }
+            showViralAnalysisProgress(analysis);
+            viralAnalysisPollTimer = setTimeout(() => pollViralAnalysis(analysisId), 1800);
+        } catch (error) {
+            document.getElementById('viralAnalysisStatus').textContent = error.message;
+            viralAnalysisPollTimer = setTimeout(() => pollViralAnalysis(analysisId), 3000);
+        }
+    }
+
+    window.startViralMomentAnalysis = async function() {
+        const activeSourceTab = document.querySelector('.source-tab.bg-zinc-800');
+        const sourceMode = activeSourceTab?.getAttribute('data-source') || 'VIDEO';
+        if (sourceMode === 'AUDIO_COVER') {
+            AppToast.warning('AI moment analysis requires a video source.');
+            return;
+        }
+        const hasUpload = Boolean(videoInput.files && videoInput.files[0]);
+        const hasYoutubeVideo = Boolean(window._ytMeta?.path);
+        const existingAnalysis = Boolean(viralAnalysisIdInput.value);
+        if (!hasUpload && !hasYoutubeVideo && !existingAnalysis) {
+            AppToast.warning('Upload a video or load a YouTube video first.');
+            return;
+        }
+        const duration = Number(sourceVideoPlayer.duration || totalMediaDuration);
+        const chunkMinutes = Number(viralMomentFinder.dataset.chunkMinutes) || 10;
+        const maxDuration = Number(viralMomentFinder.dataset.maxDuration) || 7200;
+        const maxChunks = Number(viralMomentFinder.dataset.maxChunks) || 12;
+        const estimatedRequests = Math.max(1, Math.ceil(duration / (chunkMinutes * 60)));
+        if (!Number.isFinite(duration) || duration <= 0) {
+            AppToast.warning('Wait for the video metadata to load before analysis.');
+            return;
+        }
+        if (duration > maxDuration || estimatedRequests > maxChunks) {
+            AppToast.warning(`This video is above the configured analysis limit (${maxDuration / 60} minutes or ${maxChunks} segments).`);
+            return;
+        }
+        const model = viralMomentFinder.dataset.model;
+        const confirmed = window.confirm(
+            `Video duration: ${formatTime(duration)}\nEstimated analysis: ${estimatedRequests} Gemini request${estimatedRequests === 1 ? '' : 's'} (up to ${estimatedRequests * 2} if a structured response needs one retry)\nModel: ${model}\n\nAnalyze this video?`
+        );
+        if (!confirmed) return;
+
+        const button = document.getElementById('findViralMomentsBtn');
+        button.disabled = true;
+        button.textContent = 'Starting analysis...';
+        document.getElementById('viralAnalysisStatus').textContent = sourceMode === 'YT_URL'
+            ? 'Preparing the downloaded YouTube video for analysis...'
+            : 'Uploading video and preparing analysis...';
+        try {
+            const formData = new FormData(shortsForm);
+            formData.set('source_type', 'VIDEO');
+            formData.set('active_source_mode', sourceMode);
+            if (sourceMode === 'YT_URL') formData.delete('source_video');
+            if (existingAnalysis) {
+                formData.set('viral_analysis_id', viralAnalysisIdInput.value);
+                formData.delete('source_video');
+            }
+            const response = await fetch(viralMomentFinder.dataset.analyzeUrl, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || '',
+                },
+            });
+            let data = {};
+            try {
+                data = await response.json();
+            } catch (parseError) {
+                if (response.status !== 413) throw parseError;
+            }
+            if (!response.ok || !data.success) {
+                const message = data.error || (response.status === 413
+                    ? 'The request exceeded the server upload limit. Re-load the YouTube video and try again.'
+                    : `Could not start video analysis (HTTP ${response.status}).`);
+                throw new Error(message);
+            }
+            viralAnalysisIdInput.value = data.analysis_id;
+            document.getElementById('viralAnalysisProgress').classList.remove('hidden');
+            document.getElementById('viralAnalysisProgressText').textContent = `Analyzing with ${data.model}...`;
+            document.getElementById('viralAnalysisProgressCount').textContent = `0/${data.chunk_count}`;
+            viralAnalysisPollTimer = setTimeout(() => pollViralAnalysis(data.analysis_id), 700);
+        } catch (error) {
+            document.getElementById('viralAnalysisStatus').textContent = error.message;
+            AppToast.error(error.message);
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Find Viral Moments';
+        }
+    };
+
+    document.getElementById('priorViralAnalysisSelect').addEventListener('change', event => {
+        if (event.target.value) pollViralAnalysis(event.target.value);
+    });
 
     // Card selection highlight & live preview update
     document.querySelectorAll('.aspect-choice-card').forEach(card => {
@@ -1661,6 +2450,7 @@
             // Store downloaded metadata in memory for syncJson
             window._ytMeta = {
                 path: data.path,
+                preview_url: data.preview_url,
                 title: data.title,
                 description: data.description,
                 tags: data.tags || [],
@@ -1748,7 +2538,8 @@
             return;
         }
 
-        if (isVideo && (!videoInput.files || !videoInput.files[0])) {
+        const hasViralAnalysis = Boolean(viralAnalysisIdInput.value);
+        if (isVideo && (!videoInput.files || !videoInput.files[0]) && !hasViralAnalysis) {
             AppToast.warning("Please select or upload a video file.");
             return;
         }
@@ -1779,6 +2570,11 @@
 
         try {
             const formData = new FormData(shortsForm);
+            formData.set('active_source_mode', activeSourceMode);
+            if (hasViralAnalysis) {
+                formData.delete('source_video');
+                formData.set('source_type', 'VIDEO');
+            }
             const csrfToken = document.querySelector('input[name="csrfmiddlewaretoken"]')?.value || '';
 
             const resp = await fetch(shortsForm.action || window.location.href, {
@@ -1816,6 +2612,7 @@
                             progressPercent.textContent = '100%';
                             progressStep.textContent = 'Complete! Loading your rendered chops...';
                             localStorage.removeItem(DRAFT_KEY);
+                            await window.StudioMediaDrafts?.clear(DRAFT_KEY);
                             setTimeout(() => {
                                 window.location.href = progData.redirect_url;
                             }, 600);
@@ -1881,7 +2678,7 @@
         }
 
         dropdown.classList.remove('hidden');
-        optionsContainer.innerHTML = '<p class="text-[10px] text-zinc-500 px-1 py-2 text-center animate-pulse">Generating with Gemini AI...</p>';
+        optionsContainer.textContent = 'Generating with Gemini AI...';
 
         const chop = chopsData[idx];
         if (!chop) { dropdown.classList.add('hidden'); return; }
@@ -1904,6 +2701,9 @@
                         chop_start: chop.start_seconds,
                         chop_end: chop.end_seconds,
                         hook_text: chop.hook_text || '',
+                        moment_description: chop.description || '',
+                        moment_reason: chop.reason || '',
+                        moment_category: chop.category || '',
                     }
                 })
             });
@@ -1914,38 +2714,60 @@
             const hooks = data.data?.hook_options || [];
             const titleVariants = data.data?.title_variants || [];
             const description = data.data?.description || '';
+            const tags = data.data?.tags || [];
 
-            // Store generated title/description on the chop for later use
-            if (titleVariants.length > 0) chop._aiTitles = titleVariants;
-            if (description) chop._aiDesc = description;
+            chop.ai_hook_options = hooks;
+            chop.ai_title_variants = titleVariants;
+            chop.ai_description = description;
+            chop.ai_tags = tags;
+            syncJson();
+            saveDraft();
 
-            if (hooks.length === 0) {
-                optionsContainer.innerHTML = '<p class="text-[10px] text-red-400 px-1 py-1">No hooks returned. Try again.</p>';
+            if (hooks.length === 0 && titleVariants.length === 0) {
+                optionsContainer.textContent = 'No content suggestions returned. Try again.';
                 return;
             }
 
-            optionsContainer.innerHTML = hooks.map((hook, i) => `
-                <button type="button"
-                    onclick="applyAiHook(${idx}, ${JSON.stringify(hook)})"
-                    class="w-full text-left px-2.5 py-2 rounded-lg bg-zinc-900 hover:bg-violet-600/20 border border-zinc-800 hover:border-violet-500/40 text-[10px] text-zinc-200 transition-colors leading-snug">
-                    ${hook}
-                </button>
-            `).join('');
+            optionsContainer.replaceChildren();
+            hooks.forEach(hook => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'w-full text-left px-2.5 py-2 rounded-lg bg-zinc-900 hover:bg-violet-600/20 border border-zinc-800 hover:border-violet-500/40 text-[10px] text-zinc-200 transition-colors leading-snug';
+                button.textContent = hook;
+                button.addEventListener('click', () => window.applyAiHook(idx, hook));
+                optionsContainer.appendChild(button);
+            });
 
             // Also show A/B title variants below hooks
             if (titleVariants.length > 0) {
-                optionsContainer.innerHTML += `
-                    <p class="text-[9px] font-bold uppercase text-violet-400 px-1 pt-2 pb-0.5">Title Variants (A/B):</p>
-                    ${titleVariants.map(v => `
-                        <p class="px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 leading-snug">
-                            <span class="text-violet-400 font-bold">${v.label}</span>: ${v.title}
-                        </p>
-                    `).join('')}
-                `;
+                const heading = document.createElement('p');
+                heading.className = 'text-[9px] font-bold uppercase text-violet-400 px-1 pt-2 pb-0.5';
+                heading.textContent = 'Title Variants (A/B):';
+                optionsContainer.appendChild(heading);
+                titleVariants.forEach(variant => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'w-full text-left px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-[10px] text-zinc-300 leading-snug';
+                    button.textContent = `${variant.label || 'Title'}: ${variant.title || ''}`;
+                    button.addEventListener('click', () => window.applyAiTitle(idx, variant.title || ''));
+                    optionsContainer.appendChild(button);
+                });
+            }
+            if (description) {
+                const descriptionNode = document.createElement('p');
+                descriptionNode.className = 'px-2 py-1.5 text-[10px] text-zinc-400';
+                descriptionNode.textContent = `Description: ${description}`;
+                optionsContainer.appendChild(descriptionNode);
+            }
+            if (tags.length) {
+                const tagsNode = document.createElement('p');
+                tagsNode.className = 'px-2 py-1 text-[10px] text-zinc-500';
+                tagsNode.textContent = `Hashtags: ${tags.join(' ')}`;
+                optionsContainer.appendChild(tagsNode);
             }
 
         } catch (err) {
-            optionsContainer.innerHTML = `<p class="text-[10px] text-red-400 px-1 py-1">Error: ${err.message}</p>`;
+            optionsContainer.textContent = `Error: ${err.message}`;
         }
     };
 
@@ -1964,6 +2786,14 @@
         AppToast.success('Hook text applied! ✨');
     };
 
+    window.applyAiTitle = function(idx, title) {
+        if (!String(title || '').trim()) return;
+        const chop = chopsData[idx];
+        if (chop) chop.ai_title = String(title).trim().slice(0, 180);
+        updateChop(idx, 'title', String(title).trim().slice(0, 180));
+        AppToast.success('Title applied.');
+    };
+
     /**
      * Batch-generate AI hooks for ALL chops.
      * silent=true suppresses per-chop toast (used on auto-trigger after YT download).
@@ -1979,9 +2809,17 @@
 
         const ctx = _aiGetContext();
         const tone = _aiGetTone();
+        const targetIndices = viralAnalysisIdInput.value
+            ? chopsData.map((chop, idx) => ({ chop, idx })).filter(item => item.chop.render_enabled !== false).map(item => item.idx)
+            : chopsData.map((_, idx) => idx);
+        if (!targetIndices.length) {
+            if (!silent) AppToast.warning('Select at least one suggested moment first.');
+            if (btn) { btn.disabled = false; btn.textContent = '🪄 AI Fill All'; }
+            return;
+        }
         let filled = 0;
 
-        for (let idx = 0; idx < chopsData.length; idx++) {
+        for (const idx of targetIndices) {
             const chop = chopsData[idx];
             try {
                 const resp = await fetch(AI_GENERATE_URL, {
@@ -1999,6 +2837,9 @@
                             chop_start: chop.start_seconds,
                             chop_end: chop.end_seconds,
                             hook_text: chop.hook_text || '',
+                            moment_description: chop.description || '',
+                            moment_reason: chop.reason || '',
+                            moment_category: chop.category || '',
                         }
                     })
                 });
@@ -2008,6 +2849,7 @@
                 const hooks = data.data?.hook_options || [];
                 const titleVariants = data.data?.title_variants || [];
                 const description = data.data?.description || '';
+                const tags = data.data?.tags || [];
 
                 // Apply first hook automatically
                 if (hooks.length > 0) {
@@ -2017,9 +2859,11 @@
                     chop._aiHookOptions = hooks;
                 }
 
-                // Store A/B title variants and description on chop for future use
-                if (titleVariants.length > 0) chop._aiTitles = titleVariants;
-                if (description) chop._aiDesc = description;
+                chop.ai_hook_options = hooks;
+                chop.ai_title_variants = titleVariants;
+                chop.ai_description = description;
+                chop.ai_tags = tags;
+                syncJson();
 
                 filled++;
             } catch (e) {
@@ -2035,6 +2879,91 @@
         } else if (!silent) {
             AppToast.warning('AI generation returned no results. Check your GEMINI_API_KEY.');
         }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // 🛡️ PLATFORM SAFE-ZONE GUIDES, HOOK FORMULAS & CAPTION PREVIEW
+    // ═══════════════════════════════════════════════════════════════════════
+
+    window.toggleHookFormulas = function(idx) {
+        const dropdown = document.getElementById(`hookFormulaDropdown_${idx}`);
+        if (!dropdown) return;
+        dropdown.classList.toggle('hidden');
+    };
+
+    window.applyHookFormula = function(idx, text) {
+        updateChop(idx, 'hook_text', text);
+        const input = document.getElementById(`hookInput_${idx}`);
+        if (input) {
+            input.value = text;
+            input.dispatchEvent(new Event('input'));
+        }
+        const dropdown = document.getElementById(`hookFormulaDropdown_${idx}`);
+        if (dropdown) dropdown.classList.add('hidden');
+        AppToast.success('Hook formula applied! 🚀');
+    };
+
+    window.setSafeZoneGuide = function(guideType) {
+        document.querySelectorAll('.safe-zone-btn').forEach(btn => {
+            if (btn.getAttribute('data-zone') === guideType) {
+                btn.className = 'safe-zone-btn px-2 py-1 rounded-lg text-[10px] font-semibold bg-zinc-800 text-white transition-colors';
+            } else {
+                btn.className = 'safe-zone-btn px-2 py-1 rounded-lg text-[10px] font-semibold text-zinc-400 hover:text-white transition-colors';
+            }
+        });
+
+        const overlay = document.getElementById('safeZoneOverlay');
+        const ytGuide = document.getElementById('ytSafeGuide');
+        const tiktokGuide = document.getElementById('tiktokSafeGuide');
+        const reelsGuide = document.getElementById('reelsSafeGuide');
+
+        if (!overlay) return;
+
+        if (guideType === 'none') {
+            overlay.classList.add('hidden');
+            if (ytGuide) ytGuide.classList.add('hidden');
+            if (tiktokGuide) tiktokGuide.classList.add('hidden');
+            if (reelsGuide) reelsGuide.classList.add('hidden');
+        } else {
+            overlay.classList.remove('hidden');
+            if (ytGuide) ytGuide.classList.toggle('hidden', guideType !== 'yt');
+            if (tiktokGuide) tiktokGuide.classList.toggle('hidden', guideType !== 'tiktok');
+            if (reelsGuide) reelsGuide.classList.toggle('hidden', guideType !== 'reels');
+        }
+    };
+
+    window.toggleCaptionOptions = function(isEnabled) {
+        const container = document.getElementById('captionStyleOptionsContainer');
+        const preview = document.getElementById('mockupCaptionPreview');
+        if (container) container.classList.toggle('opacity-30', !isEnabled);
+        if (container) container.classList.toggle('pointer-events-none', !isEnabled);
+        if (preview) preview.classList.toggle('hidden', !isEnabled);
+    };
+
+    window.updateMockupCaptionStyle = function(style) {
+        document.querySelectorAll('.caption-style-card').forEach(card => {
+            const isMatch = card.getAttribute('data-style') === style;
+            card.classList.toggle('border-emerald-500/50', isMatch);
+            card.classList.toggle('border-zinc-800', !isMatch);
+        });
+
+        const activeWord = document.getElementById('mockupCaptionActiveWord');
+        if (!activeWord) return;
+
+        if (style === 'NEON_CYAN') {
+            activeWord.className = 'text-[#00FFFF] bg-cyan-950/70 px-1 rounded border border-cyan-400/50 shadow';
+        } else if (style === 'FIRE_PUNCH') {
+            activeWord.className = 'text-[#FF4500] bg-red-950/70 px-1 rounded border border-red-500/50 shadow';
+        } else if (style === 'CLEAN_WHITE') {
+            activeWord.className = 'text-[#00FF66] bg-black/60 px-1 rounded shadow';
+        } else { // BEAST_YELLOW
+            activeWord.className = 'text-[#00E5FF] bg-black/80 px-1 rounded shadow';
+        }
+    };
+
+    window.toggleMockupProgressBar = function(isEnabled) {
+        const bar = document.getElementById('mockupProgressBar');
+        if (bar) bar.classList.toggle('hidden', !isEnabled);
     };
 
 </script>

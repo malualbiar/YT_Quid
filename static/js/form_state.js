@@ -16,7 +16,7 @@
     }
 
     function isExcludedForm(form) {
-        if (form.matches('[data-delete-confirm], .inline')) return true;
+        if (form.matches('[data-delete-confirm], .inline') || form.method.toLowerCase() === 'get') return true;
         const actionPath = new URL(form.getAttribute('action') || location.href, location.href).pathname;
         return /\/(delete|cancel|retry|dismiss|disconnect|set-default|toggle)(\/|$)/i.test(actionPath);
     }
@@ -124,19 +124,33 @@
                 const saved = snapshot.values?.[fieldKey];
                 if (!saved || restoredFields.has(field) || saved.type !== type && saved.type !== 'select-multiple') return;
 
+                let changed = false;
                 if (type === 'checkbox' || type === 'radio') {
-                    field.checked = Boolean(saved.checked);
+                    const checked = Boolean(saved.checked);
+                    if (field.checked !== checked) {
+                        field.checked = checked;
+                        changed = true;
+                    }
                 } else if (saved.type === 'select-multiple' && field instanceof HTMLSelectElement && field.multiple) {
                     const selected = new Set(saved.value || []);
-                    Array.from(field.options).forEach(option => { option.selected = selected.has(option.value); });
+                    Array.from(field.options).forEach(option => {
+                        const isSelected = selected.has(option.value);
+                        if (option.selected !== isSelected) {
+                            option.selected = isSelected;
+                            changed = true;
+                        }
+                    });
                 } else if (typeof saved.value === 'string' && field.value !== saved.value) {
                     field.value = saved.value;
+                    changed = true;
                 }
 
                 restoredFields.add(field);
-                field.dispatchEvent(new Event('input', { bubbles: true }));
-                field.dispatchEvent(new Event('change', { bubbles: true }));
-                restored = true;
+                if (changed) {
+                    field.dispatchEvent(new Event('input', { bubbles: true }));
+                    field.dispatchEvent(new Event('change', { bubbles: true }));
+                    restored = true;
+                }
             });
 
             if (restored && form.dataset.stateRestored !== 'true') {
@@ -179,13 +193,13 @@
     }
 
     const observer = new MutationObserver(mutations => {
+        const addedForms = new Set();
         mutations.forEach(mutation => mutation.addedNodes.forEach(node => {
             if (!(node instanceof Element)) return;
-            if (node.matches(FORM_SELECTOR)) restoreForm(node);
-            node.querySelectorAll?.(FORM_SELECTOR).forEach(restoreForm);
-            const form = node.closest('form');
-            if (form) restoreForm(form);
+            if (node.matches(FORM_SELECTOR)) addedForms.add(node);
+            node.querySelectorAll?.(FORM_SELECTOR).forEach(form => addedForms.add(form));
         }));
+        addedForms.forEach(restoreForm);
     });
     observer.observe(document.documentElement, { childList: true, subtree: true });
 })();

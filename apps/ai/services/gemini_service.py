@@ -16,7 +16,7 @@ _USAGE_CACHE_TTL = 86400  # 24 hours
 
 
 def _get_api_key():
-    return getattr(settings, 'GEMINI_API_KEY', '') or os.getenv('GEMINI_API_KEY', '')
+    return str(getattr(settings, 'GEMINI_API_KEY', '') or os.getenv('GEMINI_API_KEY', '')).strip()
 
 
 def _track_usage(input_tokens=0, output_tokens=0):
@@ -77,45 +77,81 @@ class GeminiContentService:
     def _call_gemini(cls, prompt: str) -> dict:
         """
         Send prompt to Gemini and return parsed JSON dict.
-        Falls back to an empty result dict on any error.
+        Supports model fallback cascade and retry logic for high-demand spikes (503/429).
         """
+        import re
+        import time
+
         api_key = _get_api_key()
         if not api_key:
             logger.warning('GEMINI_API_KEY not configured.')
             return {}
 
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(
-                cls.MODEL,
-                generation_config={'response_mime_type': 'application/json'},
-            )
-            response = model.generate_content(prompt)
-            text = response.text.strip()
+            from google import genai
+            from google.genai import types
 
-            # Track usage
-            try:
-                in_tok = response.usage_metadata.prompt_token_count or 0
-                out_tok = response.usage_metadata.candidates_token_count or 0
-                _track_usage(in_tok, out_tok)
-            except Exception:
-                _track_usage(len(prompt) // 4, len(text) // 4)
-
-            import re
-            
-            # Find the first { and the last }
-            match = re.search(r'\{.*\}', text, re.DOTALL)
-            if match:
-                text = match.group(0)
-
-            return json.loads(text)
-        except json.JSONDecodeError as e:
-            logger.error(f'Gemini JSON parse error: {e}')
-            return {}
+            client = genai.Client(api_key=api_key)
         except Exception as e:
-            logger.error(f'Gemini API error: {e}')
+            logger.error(f'Gemini client initialization error: {e}')
             return {}
+
+        configured_model = getattr(settings, 'GEMINI_MODEL', cls.MODEL) or cls.MODEL
+        candidate_models = []
+        for m in [configured_model, 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-flash-latest', 'gemini-3.7-flash', 'gemini-3.8-flash']:
+            if m and m not in candidate_models:
+                candidate_models.append(m)
+
+        last_error = None
+        for model_name in candidate_models:
+            for attempt in range(2):
+                try:
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(response_mime_type='application/json'),
+                    )
+                    text = (response.text or '').strip()
+
+                    # Track usage
+                    try:
+                        in_tok = response.usage_metadata.prompt_token_count or 0
+                        out_tok = response.usage_metadata.candidates_token_count or 0
+                        _track_usage(in_tok, out_tok)
+                    except Exception:
+                        _track_usage(len(prompt) // 4, len(text) // 4)
+
+                    # Extract JSON payload cleanly
+                    if '```json' in text:
+                        text = text.split('```json', 1)[1].split('```', 1)[0].strip()
+                    elif '```' in text:
+                        text = text.split('```', 1)[1].split('```', 1)[0].strip()
+
+                    start_idx = text.find('{')
+                    if start_idx != -1:
+                        parsed, _ = json.JSONDecoder().raw_decode(text[start_idx:])
+                    else:
+                        parsed = json.loads(text)
+
+                    if isinstance(parsed, dict):
+                        return parsed
+                except (json.JSONDecodeError, ValueError) as e:
+                    logger.warning(f'Gemini JSON parse error on {model_name} (attempt {attempt + 1}): {e}')
+                    last_error = e
+                    break
+                except Exception as e:
+                    last_error = e
+                    err_str = str(e).lower()
+                    if '503' in err_str or '429' in err_str or 'unavailable' in err_str:
+                        logger.warning(f'Gemini {model_name} transient error (attempt {attempt + 1}): {e}')
+                        time.sleep(0.6 * (attempt + 1))
+                        continue
+                    else:
+                        logger.warning(f'Gemini {model_name} failed: {e}')
+                        break  # Move to next fallback model
+
+        logger.error(f'All Gemini model attempts failed. Last error: {last_error}')
+        return {}
 
     @classmethod
     def _title_variants_prompt_section(cls):
@@ -132,13 +168,17 @@ class GeminiContentService:
     @classmethod
     def generate_for_short(cls, hook_text='', yt_title='', yt_description='',
                            yt_tags=None, chop_start=0, chop_end=30,
+                           moment_description='', moment_reason='', moment_category='',
                            tone='viral', count=3):
         """
         Generate content for a single Short chop.
         Returns: title_variants (3), description, tags, hook_options (3).
         """
         yt_tags = yt_tags or []
-        cache_key = cls._cache_key('short', hook_text, yt_title, tone, chop_start, chop_end)
+        cache_key = cls._cache_key(
+            'short', hook_text, yt_title, moment_description, moment_reason,
+            moment_category, tone, chop_start, chop_end,
+        )
         cached = cache.get(cache_key)
         if cached:
             return cached
@@ -152,10 +192,15 @@ SOURCE VIDEO CONTEXT:
 - Original video title: {yt_title or 'Unknown'}
 - Clip segment: {chop_start:.0f}s – {chop_end:.0f}s
 - Existing hook text: {hook_text or 'none'}
+- Moment category: {moment_category or 'unspecified'}
+- Moment description: {(moment_description or '')[:600] or 'none'}
+- Why it was selected: {(moment_reason or '')[:400] or 'none'}
 - Original tags: {tags_str}
 - Original description excerpt: {(yt_description or '')[:300]}
 
 TONE: {tone_desc}
+
+Keep every suggestion faithful to the supplied video context. Do not invent events, imply guaranteed virality, or use misleading claims.
 
 Return ONLY valid JSON matching this exact schema:
 {{

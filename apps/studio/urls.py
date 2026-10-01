@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import viral_moments_views
 
 urlpatterns = [
     # Single 1-Hour Loop / Visualizer routes
@@ -17,12 +18,16 @@ urlpatterns = [
     # Short Video Generator & Multi-Clip Chopper routes
     path('studio/shorts/', views.shorts_maker_view, name='shorts_maker'),
     path('studio/shorts/render/', views.shorts_render_view, name='shorts_render'),
+    path('studio/shorts/analyze/', viral_moments_views.viral_moments_analyze_view, name='shorts_viral_analyze'),
+    path('studio/shorts/analysis/<int:analysis_id>/status/', viral_moments_views.viral_moments_status_view, name='shorts_viral_analysis_status'),
+    path('studio/shorts/analysis/<int:analysis_id>/review/', viral_moments_views.viral_moments_review_view, name='shorts_viral_analysis_review'),
     path('studio/shorts/<int:pk>/', views.shorts_detail_view, name='shorts_detail'),
     path('studio/shorts/<int:pk>/delete/', views.shorts_delete_view, name='shorts_delete'),
     path('studio/shorts/<int:pk>/export-zip/', views.shorts_export_zip_view, name='shorts_export_zip'),
     path('studio/shorts/<int:pk>/download/<int:chop_idx>/', views.shorts_download_chop_view, name='shorts_download_chop'),
     path('studio/shorts/yt-download/', views.shorts_yt_download_view, name='shorts_yt_download'),
     path('studio/shorts/yt-preview/<str:filename>/', views.shorts_yt_preview_view, name='shorts_yt_preview'),
+    path('studio/shorts/api/generate-hooks/', views.shorts_generate_hooks_api, name='shorts_generate_hooks_api'),
 
     # AI & Tap-to-Sync Lyrics Video Generator routes
     path('studio/lyrics/', views.lyrics_maker_view, name='lyrics_maker'),

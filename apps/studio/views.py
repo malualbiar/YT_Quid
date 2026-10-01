@@ -17,12 +17,13 @@ from django.http import HttpResponse, JsonResponse, FileResponse, StreamingHttpR
 from django.urls import reverse
 from django.db import connections
 
-from .models import VideoProject, LongMixProject, ShortVideoProject, LyricVideoProject
+from .models import VideoProject, LongMixProject, ShortVideoProject, ShortVideoAnalysis, ShortVideoMoment, LyricVideoProject
 from .services.renderer import VideoStudioRenderer
 from .services.mix_engine import MixEngineService
 from .services.shorts_engine import ShortsEngineService
 from .services.lyrics_engine import LyricsEngineService
 from .services.process_tracker import RenderProcessTracker
+from .services.gemini_video_analyzer import analysis_limits
 from apps.videos.models import Video
 
 @login_required
@@ -532,11 +533,20 @@ def shorts_maker_view(request):
         'source_choices': ShortVideoProject.SourceType.choices,
         'aspect_choices': ShortVideoProject.AspectMode.choices,
         'theme_choices': ShortVideoProject.ThemeStyle.choices,
+        'caption_style_choices': ShortVideoProject.CaptionStyle.choices,
+        'caption_styles': ShortsEngineService.CAPTION_STYLES,
         'hook_position_choices': ShortVideoProject.HookPosition.choices,
+        'viral_analyses': ShortVideoAnalysis.objects.select_related('project').order_by('-created_at')[:8],
+        'viral_model': analysis_limits()['model'],
+        'viral_chunk_minutes': analysis_limits()['chunk_seconds'] // 60,
+        'viral_max_duration': analysis_limits()['max_video_duration'],
+        'viral_max_chunks': analysis_limits()['max_chunks'],
+        'viral_context_before': max(0, min(10, int(getattr(settings, 'VIRAL_CONTEXT_BEFORE_SECONDS', 3)))),
+        'viral_context_after': max(0, min(8, int(getattr(settings, 'VIRAL_CONTEXT_AFTER_SECONDS', 2)))),
     })
 
 
-def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_focal_percent, source_type, hook_position='TOP', show_cta_badge=True, auto_captions=False):
+def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_focal_percent, source_type, hook_position='TOP', show_cta_badge=True, auto_captions=False, caption_font_size=64, caption_style='BEAST_YELLOW', visual_progress_bar=True, audio_normalize=True, remove_pauses=False):
     from django.db import connections
     connections.close_all()
     try:
@@ -569,30 +579,11 @@ def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_foc
         total_chops = max(1, len(chops))
         caption_paths = {}
         render_progress_start = 10
+        # Caption model loaded lazily per-worker thread (inside _encode_single_chop)
+        # so transcription + rendering happen in parallel across clips
         if auto_captions:
-            from faster_whisper import WhisperModel
             caption_dir = tempfile.mkdtemp(prefix='shorts_captions_', dir=project_output_dir)
-            RenderProcessTracker.set_progress('shorts', project.id, 10, 'Loading local speech recognition model...')
-            caption_model = WhisperModel('tiny', device='cpu', compute_type='int8')
-            for idx, chop in enumerate(chops):
-                RenderProcessTracker.set_progress(
-                    'shorts', project.id,
-                    10 + int((idx / total_chops) * 10),
-                    f"Transcribing captions for clip {idx + 1}/{total_chops}...",
-                )
-                chop_id = int(chop.get('id') or idx + 1)
-                subtitle_path = os.path.join(caption_dir, f'captions_part{chop_id}.srt')
-                result_path = ShortsEngineService.transcribe_clip_captions(
-                    src_path,
-                    chop.get('start_seconds', 0.0),
-                    max(1.0, float(chop.get('end_seconds', 15.0)) - float(chop.get('start_seconds', 0.0))),
-                    subtitle_path,
-                    caption_model,
-                )
-                if result_path:
-                    caption_paths[idx] = result_path
-            del caption_model
-            render_progress_start = 20
+
 
         RenderProcessTracker.set_progress(
             'shorts', project.id, render_progress_start,
@@ -643,30 +634,80 @@ def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_foc
             else:
                 overlay_png = None
 
+            # Intermediate render target if pause removal (Step 8) is enabled
+            raw_render_path = os.path.join(project_output_dir, f"_raw_part{chop_id}.mp4") if remove_pauses else out_path
+
+            # Generate captions inline (parallel per worker) when auto_captions is on
+            subtitle_path = None
+            if auto_captions and caption_dir:
+                from faster_whisper import WhisperModel
+                chop_subtitle_path = os.path.join(caption_dir, f'captions_part{chop_id}.ass')
+                try:
+                    caption_model = WhisperModel('tiny', device='cpu', compute_type='int8')
+                    result_path = ShortsEngineService.transcribe_clip_captions(
+                        src_path,
+                        start_s,
+                        dur_s,
+                        chop_subtitle_path,
+                        caption_model,
+                        style_name=caption_style,
+                        font_size=caption_font_size,
+                    )
+                    subtitle_path = result_path
+                except Exception:
+                    pass  # Captions failed for this clip; render without them
+
             # Render chop
             if source_type == ShortVideoProject.SourceType.VIDEO:
                 ShortsEngineService.render_video_chop(
                     source_video_path=src_path,
-                    output_mp4_path=out_path,
+                    output_mp4_path=raw_render_path,
                     start_seconds=start_s,
                     duration_seconds=dur_s,
                     aspect_mode=aspect_mode,
                     overlay_png_path=overlay_png,
                     crop_focal_percent=crop_focal_percent,
                     project_id=project.id,
-                    subtitle_path=caption_paths.get(idx),
+                    subtitle_path=subtitle_path,
+                    caption_font_size=caption_font_size,
+                    visual_progress_bar=visual_progress_bar,
+                    audio_normalize=audio_normalize,
                 )
             else:
                 ShortsEngineService.render_audio_cover_chop(
                     cover_path=project.cover_image.path,
                     audio_path=src_path,
-                    output_mp4_path=out_path,
+                    output_mp4_path=raw_render_path,
                     start_seconds=start_s,
                     duration_seconds=dur_s,
                     overlay_png_path=overlay_png,
                     project_id=project.id,
-                    subtitle_path=caption_paths.get(idx),
+                    subtitle_path=subtitle_path,
+                    caption_font_size=caption_font_size,
+                    visual_progress_bar=visual_progress_bar,
+                    audio_normalize=audio_normalize,
                 )
+
+            # Step 8: Remove pauses / tighten pacing
+            if remove_pauses and os.path.isfile(raw_render_path):
+                from .services.silence_cutter import cut_silences
+                ffmpeg_bin = ShortsEngineService.get_ffmpeg_binary()
+                cut_ok, tightened_dur = cut_silences(
+                    input_path=raw_render_path,
+                    output_path=out_path,
+                    duration_s=dur_s,
+                    ffmpeg=ffmpeg_bin,
+                    subprocess_kwargs=ShortsEngineService.get_subprocess_kwargs(),
+                )
+                if cut_ok:
+                    dur_s = tightened_dur
+                elif not os.path.isfile(out_path):
+                    shutil.move(raw_render_path, out_path)
+                if os.path.isfile(raw_render_path):
+                    try:
+                        os.remove(raw_render_path)
+                    except OSError:
+                        pass
 
             # Cleanup overlay PNG
             if overlay_png and os.path.exists(overlay_png):
@@ -688,6 +729,10 @@ def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_foc
             return idx, {
                 'id': chop_id,
                 'title': chop_title,
+                'ai_title': str(chop.get('ai_title', ''))[:180],
+                'ai_title_variants': chop.get('ai_title_variants', [])[:3],
+                'ai_description': str(chop.get('ai_description', ''))[:500],
+                'ai_tags': chop.get('ai_tags', [])[:12] if isinstance(chop.get('ai_tags', []), list) else [],
                 'hook_text': hook_text,
                 'hook_position': chop_hook_pos,
                 'start_seconds': start_s,
@@ -698,7 +743,7 @@ def _execute_shorts_render(project_id, chops, aspect_mode, theme_style, crop_foc
                 'status': 'COMPLETED'
             }, out_path
 
-        max_workers = min(3, max(1, len(chops)))
+        max_workers = min(6, max(1, os.cpu_count() or 2, len(chops)))
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [executor.submit(_encode_single_chop, item) for item in enumerate(chops)]
             for future in concurrent.futures.as_completed(futures):
@@ -768,6 +813,14 @@ def shorts_render_view(request):
     hook_position = request.POST.get('hook_position', ShortVideoProject.HookPosition.TOP)
     show_cta_badge = request.POST.get('show_cta_badge') in ['1', 'true', 'True', 'on'] if 'show_cta_badge' in request.POST else True
     auto_captions = request.POST.get('auto_captions') in ['1', 'true', 'True', 'on']
+    caption_style = request.POST.get('caption_style', ShortVideoProject.CaptionStyle.BEAST_YELLOW)
+    visual_progress_bar = request.POST.get('visual_progress_bar') in ['1', 'true', 'True', 'on'] if 'visual_progress_bar' in request.POST else True
+    audio_normalize = request.POST.get('audio_normalize') in ['1', 'true', 'True', 'on'] if 'audio_normalize' in request.POST else True
+    remove_pauses = request.POST.get('remove_pauses') in ['1', 'true', 'True', 'on']
+    try:
+        caption_font_size = max(18, min(96, int(request.POST.get('caption_font_size', 64))))
+    except (TypeError, ValueError):
+        caption_font_size = 64
 
     # YouTube URL metadata (from yt-dlp download)
     source_yt_url = request.POST.get('source_yt_url', '').strip()
@@ -786,12 +839,26 @@ def shorts_render_view(request):
     audio_file = request.FILES.get('audio_file')
     cover_image = request.FILES.get('cover_image')
     chops_json = request.POST.get('chops_json', '').strip()
+    viral_analysis = None
+    viral_analysis_id = request.POST.get('viral_analysis_id', '').strip()
+    if viral_analysis_id:
+        try:
+            viral_analysis = ShortVideoAnalysis.objects.select_related('project').get(pk=int(viral_analysis_id))
+        except (ShortVideoAnalysis.DoesNotExist, TypeError, ValueError):
+            error = 'The selected AI analysis could not be found. Analyze the video again.'
+            if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                return JsonResponse({'error': error}, status=400)
+            messages.error(request, error)
+            return redirect('shorts_maker')
+        if viral_analysis.status != ShortVideoAnalysis.Status.COMPLETED:
+            return JsonResponse({'error': 'Wait for video analysis to finish before rendering clips.'}, status=409)
+        source_type = ShortVideoProject.SourceType.VIDEO
 
     # If YouTube video was downloaded locally, treat as VIDEO source
     if yt_downloaded_path and os.path.exists(yt_downloaded_path) and not source_video:
         source_type = ShortVideoProject.SourceType.VIDEO
 
-    if source_type == ShortVideoProject.SourceType.VIDEO and not source_video and not (yt_downloaded_path and os.path.exists(yt_downloaded_path)):
+    if source_type == ShortVideoProject.SourceType.VIDEO and not source_video and not (yt_downloaded_path and os.path.exists(yt_downloaded_path)) and not viral_analysis:
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({'error': 'Please upload a video file (.mp4, .mov, .mkv) or download from YouTube.'}, status=400)
         messages.error(request, "Please upload a video file (.mp4, .mov, .mkv) or download from YouTube.")
@@ -824,26 +891,66 @@ def shorts_render_view(request):
         messages.error(request, err_msg)
         return redirect('shorts_maker')
 
-    # Create project record
-    project = ShortVideoProject.objects.create(
-        title=title,
-        source_type=source_type,
-        source_video=source_video,
-        audio_file=audio_file,
-        cover_image=cover_image,
-        aspect_mode=aspect_mode,
-        crop_focal_percent=crop_focal_percent,
-        theme_style=theme_style,
-        hook_position=hook_position,
-        show_cta_badge=show_cta_badge,
-        chops_data=selected_chops,
-        source_yt_url=source_yt_url,
-        yt_video_title=yt_video_title,
-        yt_video_description=yt_video_description,
-        yt_video_tags=yt_video_tags,
-        yt_channel_name=yt_channel_name,
-        render_status=ShortVideoProject.Status.RENDERING
-    )
+    if viral_analysis:
+        project = viral_analysis.project
+        project.title = title
+        project.aspect_mode = aspect_mode
+        project.crop_focal_percent = crop_focal_percent
+        project.theme_style = theme_style
+        project.hook_position = hook_position
+        project.show_cta_badge = show_cta_badge
+        project.caption_style = caption_style
+        project.visual_progress_bar = visual_progress_bar
+        project.audio_normalize = audio_normalize
+        project.remove_pauses = remove_pauses
+        project.chops_data = selected_chops
+        project.source_yt_url = source_yt_url or project.source_yt_url
+        project.yt_video_title = yt_video_title or project.yt_video_title
+        project.yt_video_description = yt_video_description or project.yt_video_description
+        project.yt_video_tags = yt_video_tags or project.yt_video_tags
+        project.yt_channel_name = yt_channel_name or project.yt_channel_name
+        project.render_status = ShortVideoProject.Status.RENDERING
+        project.error_message = ''
+        project.save()
+
+        viral_analysis.moments.update(selected=False)
+        for chop in selected_chops:
+            try:
+                moment = viral_analysis.moments.get(pk=int(chop.get('moment_id')))
+                start = float(chop.get('start_seconds', moment.start_seconds))
+                end = float(chop.get('end_seconds', moment.end_seconds))
+                if 0 <= start < end <= viral_analysis.video_duration:
+                    moment.start_seconds = start
+                    moment.end_seconds = end
+                    moment.title = str(chop.get('title') or moment.title)[:180]
+                    moment.selected = True
+                    moment.save(update_fields=['start_seconds', 'end_seconds', 'title', 'selected'])
+            except (ShortVideoMoment.DoesNotExist, TypeError, ValueError):
+                continue
+    else:
+        project = ShortVideoProject.objects.create(
+            title=title,
+            source_type=source_type,
+            source_video=source_video,
+            audio_file=audio_file,
+            cover_image=cover_image,
+            aspect_mode=aspect_mode,
+            crop_focal_percent=crop_focal_percent,
+            theme_style=theme_style,
+            hook_position=hook_position,
+            show_cta_badge=show_cta_badge,
+            caption_style=caption_style,
+            visual_progress_bar=visual_progress_bar,
+            audio_normalize=audio_normalize,
+            remove_pauses=remove_pauses,
+            chops_data=selected_chops,
+            source_yt_url=source_yt_url,
+            yt_video_title=yt_video_title,
+            yt_video_description=yt_video_description,
+            yt_video_tags=yt_video_tags,
+            yt_channel_name=yt_channel_name,
+            render_status=ShortVideoProject.Status.RENDERING
+        )
 
     # Attach downloaded YouTube video if source_video was not an uploaded file
     if yt_downloaded_path and os.path.exists(yt_downloaded_path) and not source_video:
@@ -857,7 +964,22 @@ def shorts_render_view(request):
         # Launch render in daemon worker thread
         thread = threading.Thread(
             target=_execute_shorts_render,
-            args=(project.id, selected_chops, aspect_mode, theme_style, crop_focal_percent, source_type, hook_position, show_cta_badge, auto_captions),
+            args=(
+                project.id,
+                selected_chops,
+                aspect_mode,
+                theme_style,
+                crop_focal_percent,
+                source_type,
+                hook_position,
+                show_cta_badge,
+                auto_captions,
+                caption_font_size,
+                caption_style,
+                visual_progress_bar,
+                audio_normalize,
+                remove_pauses,
+            ),
             daemon=True
         )
         thread.start()
@@ -871,7 +993,22 @@ def shorts_render_view(request):
         })
 
     # Synchronous execution fallback for direct POST
-    _execute_shorts_render(project.id, selected_chops, aspect_mode, theme_style, crop_focal_percent, source_type, hook_position, show_cta_badge, auto_captions)
+    _execute_shorts_render(
+        project.id,
+        selected_chops,
+        aspect_mode,
+        theme_style,
+        crop_focal_percent,
+        source_type,
+        hook_position,
+        show_cta_badge,
+        auto_captions,
+        caption_font_size,
+        caption_style,
+        visual_progress_bar,
+        audio_normalize,
+        remove_pauses,
+    )
     project.refresh_from_db()
     if project.render_status == ShortVideoProject.Status.COMPLETED:
         messages.success(request, f"Successfully created {project.chop_count} vertical 9:16 shorts for '{project.title}'!")
@@ -880,6 +1017,83 @@ def shorts_render_view(request):
     else:
         messages.error(request, f"Shorts generation error: {project.error_message}")
     return redirect('shorts_detail', pk=project.id)
+
+
+@login_required
+def shorts_generate_hooks_api(request):
+    """
+    AJAX endpoint: Generates 3 high-impact viral hooks and psychological formulas
+    tailored to the video segment topic, category, and tone.
+    """
+    if not request.user.is_super_admin:
+        return JsonResponse({'error': 'Super Admin privileges required.'}, status=403)
+
+    try:
+        data = json.loads(request.body)
+    except Exception:
+        data = request.POST
+
+    title = data.get('title', '').strip() or 'Viral Moment'
+    tone = data.get('tone', 'viral').strip().lower()
+    category = data.get('category', 'highlight').strip()
+    description = data.get('description', '').strip()
+
+    # Proven Viral Hook Formula Templates
+    VIRAL_FORMULAS = [
+        {"type": "⚡ Curiosity Gap", "text": f"You won't believe what happened when {title.lower()[:35]}... 🤯"},
+        {"type": "💡 Secret / Hack", "text": f"The #1 secret nobody tells you about {title.lower()[:35]} 🤫"},
+        {"type": "🔥 Contrarian / Shock", "text": f"Stop scrolling! Why you're WRONG about this... ⚠️"},
+        {"type": "🎬 Dramatic Teaser", "text": "Wait for the end... I was NOT expecting that! 🔥"},
+        {"type": "🚀 High Energy", "text": f"This is absolute perfection! Watch till the end 🔥"},
+        {"type": "🎯 Question Prompt", "text": f"Did you know about this? Let me explain... 👇"}
+    ]
+
+    ai_hooks = []
+    try:
+        from apps.ai.services.gemini_service import GeminiContentService
+        gen_res = GeminiContentService.generate_for_short(
+            hook_text=title,
+            yt_title=title,
+            moment_description=description,
+            moment_category=category,
+            tone=tone,
+            count=3
+        )
+        ai_hooks = gen_res.get('hook_options', [])
+    except Exception as e:
+        logger.warning(f"AI hook generation fallback: {e}")
+
+    if not ai_hooks:
+        if tone == 'hype':
+            ai_hooks = [
+                f"THIS IS INSANE! 🔥 {title[:30]}",
+                "WAIT FOR THE DROP... 🤯",
+                f"100% UNREAL MOMENT! ⚡"
+            ]
+        elif tone == 'chill':
+            ai_hooks = [
+                f"Vibe check with {title[:30]} ✨",
+                "Pure relaxation therapy... 🎧",
+                "Save this for your chill session 🌙"
+            ]
+        elif tone == 'educational':
+            ai_hooks = [
+                f"The science behind {title[:30]} 🧠",
+                "3 things you never knew about this... 💡",
+                "Here's why this actually works 👇"
+            ]
+        else:
+            ai_hooks = [
+                f"Nobody expected this to happen... 🤯",
+                f"Wait for the ending! 🔥 {title[:28]}",
+                f"The most satisfying moment ever ✨"
+            ]
+
+    return JsonResponse({
+        'success': True,
+        'ai_hooks': ai_hooks[:3],
+        'formulas': VIRAL_FORMULAS,
+    })
 
 
 @login_required

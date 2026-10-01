@@ -1,10 +1,11 @@
 import io
 import json
 import os
+import sys
 import tempfile
 import wave
 import struct
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from PIL import Image
 from django.test import TestCase, Client, override_settings
 from django.urls import reverse
@@ -51,6 +52,27 @@ class ShortVideoProjectTestCase(TestCase):
         self.assertIn("Wait for 0:15", project.youtube_title_for_chop(0))
         self.assertIn("#shorts", project.youtube_description_for_chop(0))
 
+    def test_rendered_chop_title_beats_generated_part_label(self):
+        project = ShortVideoProject.objects.create(
+            title="Aesthetic Vibes",
+            yt_video_title="Original Song Breakdown",
+            chops_data=[
+                {
+                    "id": 1,
+                    "title": "The Hook Nobody Expected",
+                    "hook_text": "Wait for the twist...",
+                    "start_seconds": 0.0,
+                    "end_seconds": 15.0,
+                    "duration": 15.0,
+                    "status": "COMPLETED",
+                }
+            ]
+        )
+
+        self.assertIn("The Hook Nobody Expected", project.youtube_title_for_chop(0))
+        self.assertNotIn("Part 1", project.youtube_title_for_chop(0))
+        self.assertIn("The_Hook_Nobody_Expected", project.export_filename_for_chop(0))
+
     def test_generate_chop_splits(self):
         chops = ShortsEngineService.generate_chop_splits(total_duration=45.0, interval_seconds=15.0)
         self.assertEqual(len(chops), 3)
@@ -76,6 +98,12 @@ class ShortVideoProjectTestCase(TestCase):
 
         self.assertIn('00:00:00,200 --> 00:00:01,600', srt)
         self.assertIn('Hello there, welcome back!', srt)
+
+    def test_auto_caption_font_size_fits_vertical_video(self):
+        caption_filter = ShortsEngineService._caption_filter('captions.srt', 30)
+        self.assertIn('FontSize=30', caption_filter)
+        self.assertIn('MarginV=320', caption_filter)
+        self.assertIn('FontSize=72', ShortsEngineService._caption_filter('captions.srt', 99))
 
     def test_prepare_overlay_banner(self):
         for pos in ['TOP', 'CENTER', 'BOTTOM']:
@@ -139,22 +167,26 @@ class ShortVideoProjectTestCase(TestCase):
             {"id": 1, "title": "Part 1", "start_seconds": 0.0, "end_seconds": 15.0, "duration": 15.0},
         ]
 
+        mock_whisper = Mock()
+        whisper_module = Mock(WhisperModel=mock_whisper)
         with patch.object(ShortsEngineService, 'render_video_chop') as mock_render_chop, \
                 patch.object(ShortsEngineService, 'inspect_media_duration', return_value=15.0), \
                 patch.object(ShortsEngineService, 'transcribe_clip_captions', return_value='captions.srt') as mock_transcribe, \
-                patch('faster_whisper.WhisperModel') as mock_whisper:
+            patch.dict(sys.modules, {'faster_whisper': whisper_module}):
             response = self.client.post(reverse('shorts_render'), {
                 'title': 'Captioned Short',
                 'source_type': 'VIDEO',
                 'source_video': dummy_video,
                 'chops_json': json.dumps(chops_payload),
                 'auto_captions': '1',
+                'caption_font_size': '24',
             }, follow=True)
 
         self.assertEqual(response.status_code, 200)
         mock_whisper.assert_called_once_with('tiny', device='cpu', compute_type='int8')
         mock_transcribe.assert_called_once()
         self.assertEqual(mock_render_chop.call_args.kwargs['subtitle_path'], 'captions.srt')
+        self.assertEqual(mock_render_chop.call_args.kwargs['caption_font_size'], 24)
 
     def test_shorts_render_rejects_when_all_chops_are_unselected(self):
         response = self.client.post(
@@ -345,5 +377,111 @@ class ShortVideoProjectTestCase(TestCase):
         # 3. Model field default is True
         project = ShortVideoProject.objects.create(title="CTA Test Project")
         self.assertTrue(project.show_cta_badge)
+        self.assertEqual(project.caption_style, ShortVideoProject.CaptionStyle.BEAST_YELLOW)
+        self.assertTrue(project.visual_progress_bar)
+        self.assertTrue(project.audio_normalize)
+
+    def test_format_ass_timestamp(self):
+        self.assertEqual(ShortsEngineService.format_ass_timestamp(0.0), "0:00:00.00")
+        self.assertEqual(ShortsEngineService.format_ass_timestamp(65.456), "0:01:05.46")
+        self.assertEqual(ShortsEngineService.format_ass_timestamp(3661.129), "1:01:01.13")
+
+    def test_write_caption_ass_generates_kinetic_highlight_dialogue(self):
+        words = [
+            {'word': 'Stop', 'start': 0.0, 'end': 0.4},
+            {'word': 'scrolling', 'start': 0.4, 'end': 0.8},
+            {'word': 'right', 'start': 0.8, 'end': 1.1},
+            {'word': 'now!', 'start': 1.1, 'end': 1.5},
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ass_path = os.path.join(temp_dir, 'kinetic.ass')
+            result = ShortsEngineService.write_caption_ass(
+                words=words,
+                duration_seconds=5.0,
+                output_ass_path=ass_path,
+                font_size=32,
+                style_name='BEAST_YELLOW'
+            )
+            self.assertEqual(result, ass_path)
+            with open(ass_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+
+        self.assertIn('[Script Info]', content)
+        self.assertIn('[V4+ Styles]', content)
+        self.assertIn('[Events]', content)
+        self.assertIn('Style: Default', content)
+        self.assertIn('Dialogue:', content)
+        self.assertIn('STOP', content)
+        self.assertIn('SCROLLING', content)
+        # Check active kinetic highlight tag was injected
+        self.assertIn('{\\c&H0000E5FF&\\b1}', content)
+
+    def test_caption_filter_ass_handling(self):
+        ass_filter = ShortsEngineService._caption_filter('C:/path/to/caps.ass', 30)
+        self.assertTrue(ass_filter.startswith("ass=filename='"))
+        self.assertIn("caps.ass", ass_filter)
+
+    @patch('apps.ai.services.gemini_service.GeminiContentService.generate_for_short')
+    def test_shorts_generate_hooks_api(self, mock_gemini):
+        mock_gemini.return_value = {
+            'hook_options': [
+                'Wait for this insane python trick! 🔥',
+                'You will NOT believe how easy this is 🤯',
+                'Stop writing python code like this ⚠️'
+            ]
+        }
+        # GET request
+        res_get = self.client.get(reverse('shorts_generate_hooks_api'))
+        self.assertEqual(res_get.status_code, 200)
+        data = res_get.json()
+        self.assertTrue(data['success'])
+        self.assertIn('formulas', data)
+        self.assertTrue(len(data['formulas']) >= 5)
+
+        # POST request with topic
+        res_post = self.client.post(
+            reverse('shorts_generate_hooks_api'),
+            data=json.dumps({'title': 'Python Coding Tips', 'source_type': 'VIDEO'}),
+            content_type='application/json'
+        )
+        self.assertEqual(res_post.status_code, 200)
+        post_data = res_post.json()
+        self.assertTrue(post_data['success'])
+        self.assertIn('ai_hooks', post_data)
+        self.assertEqual(len(post_data['ai_hooks']), 3)
+        self.assertEqual(post_data['ai_hooks'][0], 'Wait for this insane python trick! 🔥')
+
+    def test_silence_to_keep_calculation(self):
+        """Pipeline Step 8: Silence removal converts silence ranges to speech keep ranges."""
+        from apps.studio.services.silence_cutter import silence_to_keep
+
+        # No silence -> keep full duration
+        kept_full = silence_to_keep([], 30.0)
+        self.assertEqual(kept_full, [(0.0, 30.0)])
+
+        # Single silence segment in middle
+        kept_mid = silence_to_keep([(5.0, 8.0)], 20.0)
+        self.assertEqual(len(kept_mid), 2)
+        # First speech chunk ends around 5.08s (with pad)
+        self.assertAlmostEqual(kept_mid[0][0], 0.0, places=1)
+        self.assertTrue(kept_mid[0][1] <= 5.15)
+        # Second speech chunk starts around 7.95s (with pad)
+        self.assertTrue(kept_mid[1][0] >= 7.9)
+        self.assertAlmostEqual(kept_mid[1][1], 20.0, places=1)
+
+    def test_shortvideoproject_remove_pauses_field(self):
+        """Pipeline Step 8: ShortVideoProject includes remove_pauses flag."""
+        project = ShortVideoProject.objects.create(
+            title="Silence Removal Test",
+            remove_pauses=True,
+            visual_progress_bar=True,
+            audio_normalize=True,
+        )
+        self.assertTrue(project.remove_pauses)
+        project.remove_pauses = False
+        project.save(update_fields=['remove_pauses'])
+        project.refresh_from_db()
+        self.assertFalse(project.remove_pauses)
+
 
 

@@ -1,5 +1,6 @@
 import os
 import json
+import gc
 import tempfile
 from datetime import timedelta
 from unittest.mock import patch, MagicMock
@@ -8,8 +9,10 @@ from django.urls import reverse
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from googleapiclient.errors import HttpError
 
 from apps.publishing.models import YouTubeOAuthAccount, PublishingJob
+from apps.publishing.services.uploader_service import YouTubeUploaderService
 from apps.studio.models import LongMixProject, ShortVideoProject, LyricVideoProject, VideoProject
 from apps.artists.models import Artist, YouTubeChannel
 
@@ -260,4 +263,45 @@ class PublishingAppTests(TestCase):
         job2 = PublishingJob.objects.filter(title='Studio Assistant Manual Video').first()
         self.assertIsNotNone(job2)
         self.assertEqual(job2.upload_engine, PublishingJob.UploadEngine.STUDIO_DISPATCHER)
+
+    @patch('apps.publishing.services.playwright_uploader.PlaywrightStudioUploader.execute_browser_upload')
+    @patch('apps.publishing.services.uploader_service.MediaFileUpload')
+    @patch('apps.publishing.services.uploader_service.YouTubeUploaderService.get_authenticated_service')
+    def test_api_upload_falls_back_to_browser_on_quota_error(self, mock_get_service, mock_media_upload, mock_browser_upload):
+        fd, temp_path = tempfile.mkstemp(suffix='.mp4')
+        os.close(fd)
+        with open(temp_path, 'wb') as temp_video:
+            temp_video.write(b'video-bytes')
+
+        try:
+            job = PublishingJob.objects.create(
+                account=self.oauth_account,
+                title='Quota fallback test',
+                video_file_path=temp_path,
+                status=PublishingJob.Status.QUEUED,
+                upload_engine=PublishingJob.UploadEngine.API_V3,
+            )
+
+            request = MagicMock()
+            http_error = HttpError(
+                resp=MagicMock(status=400, reason='Bad Request', headers={}),
+                content=b'{"error":{"errors":[{"reason":"quotaExceeded","message":"The user has exceeded the number of videos they may upload."}]}}',
+            )
+            request.next_chunk.side_effect = http_error
+
+            youtube_service = MagicMock()
+            youtube_service.videos.return_value.insert.return_value = request
+            mock_get_service.return_value = youtube_service
+            mock_media_upload.return_value = MagicMock()
+
+            YouTubeUploaderService._execute_upload_job_api_v3(job)
+
+            job.refresh_from_db()
+            self.assertEqual(job.upload_engine, PublishingJob.UploadEngine.BROWSER_AUTOMATION)
+            self.assertIn('quota', job.error_message.lower())
+            mock_browser_upload.assert_called_once_with(job.id)
+        finally:
+            gc.collect()
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
 

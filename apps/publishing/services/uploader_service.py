@@ -1,5 +1,6 @@
 import os
 import time
+import json
 import logging
 import threading
 from django.utils import timezone
@@ -30,6 +31,65 @@ class YouTubeUploaderService:
         """
         creds = account.get_credentials()
         return build('youtube', 'v3', credentials=creds, cache_discovery=False)
+
+    @staticmethod
+    def _extract_http_error_text(exc):
+        """Normalizes Google API errors into a readable string for fallback decisions."""
+        payload = ''
+        if hasattr(exc, 'content'):
+            raw = exc.content
+            if isinstance(raw, (bytes, bytearray)):
+                payload = raw.decode('utf-8', errors='replace')
+            else:
+                payload = str(raw)
+
+        resp = getattr(exc, 'resp', None)
+        status = getattr(resp, 'status', None)
+        reason = getattr(resp, 'reason', '') or ''
+        reason_text = f' {reason}' if reason else ''
+        return status, f"{reason_text} {payload}".strip()
+
+    @classmethod
+    def _should_retry_via_browser(cls, exc):
+        """Identifies quota/network errors where the browser automation fallback is safer."""
+        if isinstance(exc, HttpError):
+            status, message = cls._extract_http_error_text(exc)
+            combined = (message or str(exc)).lower()
+            if status in [400, 403, 429, 500, 502, 503, 504]:
+                if any(token in combined for token in [
+                    'quota', 'daily limit', 'exceeded the number of videos', 'rate limit',
+                    'too many requests', 'temporarily unavailable', 'service unavailable',
+                    'backend error', 'unable to find the server', 'not resolved', 'network',
+                    'connection', 'timed out', 'timeout', 'ssl', 'gaierror'
+                ]):
+                    return True
+            return False
+
+        message = str(exc).lower()
+        return any(token in message for token in [
+            'unable to find the server', 'youtube.googleapis.com', 'not resolved',
+            'network is unreachable', 'connection aborted', 'timed out', 'timeout',
+            'quota', 'exceeded the number of videos', 'daily limit', 'too many requests',
+            'rate limit', 'temporarily unavailable', 'service unavailable'
+        ])
+
+    @classmethod
+    def _fallback_to_browser_upload(cls, job):
+        """Switch a failing API upload to the browser automation engine."""
+        if job.upload_engine == PublishingJob.UploadEngine.BROWSER_AUTOMATION:
+            return
+
+        job.upload_engine = PublishingJob.UploadEngine.BROWSER_AUTOMATION
+        job.status = PublishingJob.Status.QUEUED
+        job.error_message = (
+            'Google API upload is unavailable or quota-limited. Retrying via browser automation '
+            'instead of the direct API connection.'
+        )
+        job.save(update_fields=['upload_engine', 'status', 'error_message'])
+
+        from .playwright_uploader import PlaywrightStudioUploader
+        logger.warning(f"Falling back to browser automation for Job #{job.id} after API error.")
+        PlaywrightStudioUploader.execute_browser_upload(job.id)
 
     @classmethod
     def start_upload_async(cls, job_id):
@@ -268,14 +328,23 @@ class YouTubeUploaderService:
             logger.info(f"Job #{job.id} completed successfully! Video ID: {video_id}")
 
         except HttpError as he:
-            error_details = he.content.decode('utf-8') if hasattr(he, 'content') else str(he)
+            error_details = he.content.decode('utf-8', errors='replace') if hasattr(he, 'content') else str(he)
             logger.error(f"Google API HttpError for Job #{job.id}: {error_details}")
+
+            if cls._should_retry_via_browser(he):
+                cls._fallback_to_browser_upload(job)
+                return
+
             job.status = PublishingJob.Status.FAILED
             job.error_message = f"YouTube API Error ({he.resp.status}): {he._get_reason()}"
             job.save(update_fields=['status', 'error_message'])
 
         except Exception as e:
             logger.error(f"Unexpected error executing Job #{job.id}: {e}", exc_info=True)
+            if cls._should_retry_via_browser(e):
+                cls._fallback_to_browser_upload(job)
+                return
+
             job.status = PublishingJob.Status.FAILED
             job.error_message = str(e)
             job.save(update_fields=['status', 'error_message'])

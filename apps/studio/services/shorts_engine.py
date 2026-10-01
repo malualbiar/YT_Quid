@@ -50,6 +50,164 @@ class ShortsEngineService:
 
         return 60.0  # Safe default 60s
 
+    CAPTION_STYLES = {
+        'BEAST_YELLOW': {
+            'name': 'MrBeast Yellow Highlight',
+            'font_name': 'Arial Black',
+            'primary_color': '&H00FFFFFF&',    # White for inactive words
+            'highlight_color': '&H0000E5FF&',  # Vibrant Gold / Yellow for active word (&HAABBGGRR&: B=00, G=E5, R=FF)
+            'outline_color': '&H00000000&',    # Pure black outline
+            'back_color': '&H80000000&',       # Semi-transparent shadow
+            'outline_width': 6,
+            'shadow_depth': 3,
+            'margin_v': 360,
+        },
+        'NEON_CYAN': {
+            'name': 'Cyber Neon Cyan',
+            'font_name': 'Arial Black',
+            'primary_color': '&H00FFFFFF&',
+            'highlight_color': '&H00FFFF00&',  # Electric Cyan (&HAABBGGRR&: B=FF, G=FF, R=00)
+            'outline_color': '&H00000000&',
+            'back_color': '&H80000000&',
+            'outline_width': 6,
+            'shadow_depth': 3,
+            'margin_v': 360,
+        },
+        'FIRE_PUNCH': {
+            'name': 'Fire Punch Orange/Red',
+            'font_name': 'Arial Black',
+            'primary_color': '&H00FFFFFF&',
+            'highlight_color': '&H002060FF&',  # Neon Orange / Red (&HAABBGGRR&: B=20, G=60, R=FF)
+            'outline_color': '&H00000000&',
+            'back_color': '&H80000000&',
+            'outline_width': 6,
+            'shadow_depth': 3,
+            'margin_v': 360,
+        },
+        'CLEAN_WHITE': {
+            'name': 'Classic Bold White',
+            'font_name': 'Arial Black',
+            'primary_color': '&H00FFFFFF&',
+            'highlight_color': '&H0000FF00&',  # Neon green accent
+            'outline_color': '&H00000000&',
+            'back_color': '&H80000000&',
+            'outline_width': 5,
+            'shadow_depth': 2,
+            'margin_v': 360,
+        },
+    }
+
+    @classmethod
+    def format_ass_timestamp(cls, seconds):
+        seconds = max(0.0, float(seconds))
+        centiseconds = int(round((seconds % 1.0) * 100))
+        if centiseconds >= 100:
+            seconds += 1.0
+            centiseconds = 0
+        total_secs = int(seconds)
+        hours = total_secs // 3600
+        minutes = (total_secs % 3600) // 60
+        secs = total_secs % 60
+        return f"{hours}:{minutes:02d}:{secs:02d}.{centiseconds:02d}"
+
+    @classmethod
+    def write_caption_ass(cls, words, duration_seconds, output_ass_path, style_name='BEAST_YELLOW', font_size=64):
+        """
+        Generates dynamic ASS subtitles with kinetic word-by-word active highlight animation.
+        """
+        duration = max(0.0, float(duration_seconds))
+        style_config = cls.CAPTION_STYLES.get(style_name) or cls.CAPTION_STYLES['BEAST_YELLOW']
+
+        font_name = style_config.get('font_name', 'Arial Black')
+        primary_color = style_config.get('primary_color', '&H00FFFFFF&')
+        highlight_color = style_config.get('highlight_color', '&H0000E5FF&')
+        outline_color = style_config.get('outline_color', '&H00000000&')
+        back_color = style_config.get('back_color', '&H80000000&')
+        outline_w = style_config.get('outline_width', 6)
+        shadow_d = style_config.get('shadow_depth', 3)
+        margin_v = style_config.get('margin_v', 360)
+
+        try:
+            font_size = max(32, min(96, int(font_size)))
+        except (TypeError, ValueError):
+            font_size = 64
+
+        # Group words into short punchy lines (3-5 words max for viral mobile retention)
+        groups = []
+        current = []
+
+        def flush_group():
+            if current:
+                groups.append(current[:])
+                current.clear()
+
+        for item in words:
+            text = str(item.get('word', '')).strip().upper()
+            start = max(0.0, float(item.get('start', 0.0)))
+            end = min(duration, float(item.get('end', start + 0.3)))
+            if not text or start >= duration or end <= start:
+                continue
+
+            current_text = ' '.join(w['word'] for w in current)
+            if current and (
+                len(current) >= 4
+                or len(current_text) + len(text) + 1 > 28
+                or start - current[-1]['end'] > 0.6
+            ):
+                flush_group()
+            current.append({'word': text, 'start': start, 'end': end})
+        flush_group()
+
+        if not groups:
+            return None
+
+        os.makedirs(os.path.dirname(os.path.abspath(output_ass_path)), exist_ok=True)
+
+        lines = [
+            "[Script Info]",
+            "Title: Viral Shorts Dynamic Captions",
+            "ScriptType: v4.00+",
+            "WrapStyle: 0",
+            "ScaledBorderAndShadow: yes",
+            "PlayResX: 1080",
+            "PlayResY: 1920",
+            "",
+            "[V4+ Styles]",
+            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
+            f"Style: Default,{font_name},{font_size},{primary_color},{highlight_color},{outline_color},{back_color},-1,0,0,0,100,100,1,0,1,{outline_w},{shadow_d},2,60,60,{margin_v},1",
+            "",
+            "[Events]",
+            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+        ]
+
+        for group in groups:
+            for idx, active_w in enumerate(group):
+                w_start = active_w['start']
+                if idx < len(group) - 1:
+                    w_end = min(group[idx + 1]['start'], max(active_w['end'], w_start + 0.15))
+                else:
+                    w_end = min(duration, max(active_w['end'], w_start + 0.15))
+
+                if w_end <= w_start:
+                    continue
+
+                line_words = []
+                for j, w in enumerate(group):
+                    if j == idx:
+                        line_words.append(f"{{\\c{highlight_color}\\b1}}{w['word']}{{\\r}}")
+                    else:
+                        line_words.append(f"{{\\c{primary_color}}}{w['word']}")
+
+                dialogue_text = ' '.join(line_words)
+                start_ts = cls.format_ass_timestamp(w_start)
+                end_ts = cls.format_ass_timestamp(w_end)
+                lines.append(f"Dialogue: 0,{start_ts},{end_ts},Default,,0,0,0,,{dialogue_text}")
+
+        with open(output_ass_path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(lines) + '\n')
+
+        return output_ass_path
+
     @classmethod
     def write_caption_srt(cls, words, duration_seconds, output_srt_path):
         duration = max(0.0, float(duration_seconds))
@@ -102,8 +260,8 @@ class ShortsEngineService:
         return output_srt_path
 
     @classmethod
-    def transcribe_clip_captions(cls, source_path, start_seconds, duration_seconds, output_srt_path, model):
-        audio_path = output_srt_path[:-4] + '.wav'
+    def transcribe_clip_captions(cls, source_path, start_seconds, duration_seconds, output_path, model, style_name='BEAST_YELLOW', font_size=64):
+        audio_path = output_path.rsplit('.', 1)[0] + '.wav'
         ffmpeg = cls.get_ffmpeg_binary()
         start = max(0.0, float(start_seconds))
         duration = max(0.1, float(duration_seconds))
@@ -154,15 +312,24 @@ class ShortsEngineService:
                     for index, word in enumerate(segment_words)
                 )
 
-            return cls.write_caption_srt(words, duration, output_srt_path)
+            if output_path.lower().endswith('.srt'):
+                return cls.write_caption_srt(words, duration, output_path)
+            else:
+                return cls.write_caption_ass(words, duration, output_path, style_name=style_name, font_size=font_size)
         finally:
             if os.path.exists(audio_path):
                 os.remove(audio_path)
 
     @classmethod
-    def _caption_filter(cls, subtitle_path):
+    def _caption_filter(cls, subtitle_path, font_size=64):
         escaped_path = os.path.abspath(str(subtitle_path)).replace('\\', '/').replace(':', r'\:').replace("'", r"\'")
-        style = 'FontName=Arial,FontSize=58,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=4,Shadow=1,Alignment=2,MarginV=220'
+        if str(subtitle_path).lower().endswith('.ass'):
+            return f"ass=filename='{escaped_path}'"
+        try:
+            font_size = max(18, min(72, int(font_size)))
+        except (TypeError, ValueError):
+            font_size = 30
+        style = f'FontName=Arial Black,FontSize={font_size},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=4,Shadow=1,Alignment=2,MarginV=320'
         return f"subtitles=filename='{escaped_path}':force_style='{style}'"
 
     @classmethod
@@ -349,9 +516,9 @@ class ShortsEngineService:
         return img
 
     @classmethod
-    def render_video_chop(cls, source_video_path, output_mp4_path, start_seconds, duration_seconds, aspect_mode='BLURRED_FIT', overlay_png_path=None, crop_focal_percent=50, project_id=None, subtitle_path=None):
+    def render_video_chop(cls, source_video_path, output_mp4_path, start_seconds, duration_seconds, aspect_mode='BLURRED_FIT', overlay_png_path=None, crop_focal_percent=50, project_id=None, subtitle_path=None, caption_font_size=64, visual_progress_bar=True, audio_normalize=True):
         """
-        Extracts and converts a video segment to 1080x1920 (9:16) with subject framing and overlay banners.
+        Extracts and converts a video segment to 1080x1920 (9:16) with subject framing, overlay banners, dynamic captions, and retention bar.
         """
         ffmpeg = cls.get_ffmpeg_binary()
         source_video_path = os.path.abspath(str(source_video_path))
@@ -375,36 +542,55 @@ class ShortsEngineService:
                 "[bg][fg]overlay=(W-w)/2:(H-h)/2[base]"
             )
 
-        if subtitle_path and os.path.exists(str(subtitle_path)):
-            vf_base = vf_base.replace('[base]', '[base_without_captions]')
-            vf_base += f"; [base_without_captions]{cls._caption_filter(subtitle_path)}[base]"
-
         inputs = [
             '-ss', f"{start_s:.3f}",
             '-t', f"{dur_s:.3f}",
             '-i', source_video_path
         ]
 
+        filter_parts = [vf_base]
+        current_v = '[base]'
+
+        if subtitle_path and os.path.exists(str(subtitle_path)):
+            filter_parts.append(f"{current_v}{cls._caption_filter(subtitle_path, caption_font_size)}[captioned]")
+            current_v = '[captioned]'
+
         if overlay_png_path and os.path.exists(str(overlay_png_path)):
+            # Main video is always input [0]; overlay PNG is the next -i → always [1]
+            overlay_idx = inputs.count('-i')
             inputs.extend(['-i', os.path.abspath(str(overlay_png_path))])
-            filter_complex = f"{vf_base}; [base][1:v]overlay=0:0[vout]"
-            map_out = '[vout]'
-        else:
-            filter_complex = f"{vf_base}"
-            map_out = '[base]'
+            filter_parts.append(f"{current_v}[{overlay_idx}:v]overlay=0:0[overlayed]")
+            current_v = '[overlayed]'
+
+        if visual_progress_bar:
+            filter_parts.append(
+                f"{current_v}drawbox=x=0:y=ih-12:w=iw:h=12:color=0x000000@0.5:t=fill,"
+                f"drawbox=x=0:y=ih-12:w='iw*(t/{dur_s:.3f})':h=12:color=0x10B981@1:t=fill[prog]"
+            )
+            current_v = '[prog]'
+
+        filter_complex = '; '.join(filter_parts)
+
+        audio_args = ['-c:a', 'aac', '-b:a', '128k']
+        if audio_normalize:
+            # dynaudnorm: single-pass peak normalization — ~3x faster than loudnorm's 2-pass EBU R128
+            audio_args = ['-af', 'dynaudnorm=p=0.95:m=100:s=5', *audio_args]
 
         cmd = [
             ffmpeg, '-y',
+            # Faster input probing (skip unnecessary stream analysis)
+            '-probesize', '5000000',
+            '-analyzeduration', '1000000',
             *inputs,
             '-filter_complex', filter_complex,
-            '-map', map_out,
+            '-map', current_v,
             '-map', '0:a?',
             '-c:v', 'libx264',
-            '-preset', 'veryfast',
+            '-preset', 'ultrafast',   # ~50% faster than veryfast; fine for shorts
+            '-tune', 'fastdecode',    # optimize bitstream for fast playback & encoding
             '-threads', '0',
             '-pix_fmt', 'yuv420p',
-            '-c:a', 'aac',
-            '-b:a', '192k',
+            *audio_args,
             '-movflags', '+faststart',
             output_mp4_path
         ]
@@ -439,9 +625,9 @@ class ShortsEngineService:
         return output_mp4_path
 
     @classmethod
-    def render_audio_cover_chop(cls, cover_path, audio_path, output_mp4_path, start_seconds, duration_seconds, overlay_png_path=None, project_id=None, subtitle_path=None):
+    def render_audio_cover_chop(cls, cover_path, audio_path, output_mp4_path, start_seconds, duration_seconds, overlay_png_path=None, project_id=None, subtitle_path=None, caption_font_size=64, visual_progress_bar=True, audio_normalize=True):
         """
-        Renders a 1080x1920 vertical video from an audio file and cover image.
+        Renders a 1080x1920 vertical video from an audio file and cover image with dynamic captions & retention bar.
         """
         ffmpeg = cls.get_ffmpeg_binary()
         cover_path = os.path.abspath(str(cover_path))
@@ -467,18 +653,34 @@ class ShortsEngineService:
 
             filter_parts = []
             video_label = '[0:v]'
-            if overlay_png_path and os.path.exists(str(overlay_png_path)):
-                inputs.extend(['-i', os.path.abspath(str(overlay_png_path))])
-                filter_parts.append('[0:v][2:v]overlay=0:0[base]')
-                video_label = '[base]'
             if subtitle_path and os.path.exists(str(subtitle_path)):
-                filter_parts.append(f"{video_label}{cls._caption_filter(subtitle_path)}[captioned]")
+                filter_parts.append(f"{video_label}{cls._caption_filter(subtitle_path, caption_font_size)}[captioned]")
                 video_label = '[captioned]'
+
+            if overlay_png_path and os.path.exists(str(overlay_png_path)):
+                overlay_idx = inputs.count('-i')  # cover=[0], audio=[1], overlay=[2]
+                inputs.extend(['-i', os.path.abspath(str(overlay_png_path))])
+                filter_parts.append(f"{video_label}[{overlay_idx}:v]overlay=0:0[overlayed]")
+                video_label = '[overlayed]'
+
+            if visual_progress_bar:
+                filter_parts.append(
+                    f"{video_label}drawbox=x=0:y=ih-12:w=iw:h=12:color=0x000000@0.5:t=fill,"
+                    f"drawbox=x=0:y=ih-12:w='iw*(t/{dur_s:.3f})':h=12:color=0x10B981@1:t=fill[prog]"
+                )
+                video_label = '[prog]'
+
             filter_complex = '; '.join(filter_parts) if filter_parts else None
             map_args = ['-map', video_label, '-map', '1:a']
 
+            audio_args = ['-c:a', 'aac', '-b:a', '128k']
+            if audio_normalize:
+                audio_args = ['-af', 'dynaudnorm=p=0.95:m=100:s=5', *audio_args]
+
             cmd = [
                 ffmpeg, '-y',
+                '-probesize', '5000000',
+                '-analyzeduration', '1000000',
                 *inputs,
             ]
             if filter_complex:
@@ -487,11 +689,10 @@ class ShortsEngineService:
                 *map_args,
                 '-c:v', 'libx264',
                 '-tune', 'stillimage',
-                '-preset', 'veryfast',
+                '-preset', 'ultrafast',
                 '-threads', '0',
                 '-pix_fmt', 'yuv420p',
-                '-c:a', 'aac',
-                '-b:a', '192k',
+                *audio_args,
                 '-shortest',
                 '-movflags', '+faststart',
                 output_mp4_path

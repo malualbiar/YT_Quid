@@ -16,6 +16,7 @@ flatbuffers==25.12.19
 fsspec==2026.7.0
 google-api-core==2.36.0
 google-api-python-client==2.200.0
+google-genai==2.14.0
 google-auth==2.57.1
 google-auth-httplib2==0.4.2
 googleapis-common-protos==1.75.3
