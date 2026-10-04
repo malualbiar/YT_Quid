@@ -66,6 +66,39 @@ class VideoProject(models.Model):
         )
 
 
+class NarrationVideoProject(models.Model):
+    """A script-led image sequence with locally generated Kokoro narration."""
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        RENDERING = 'RENDERING', 'Rendering'
+        COMPLETED = 'COMPLETED', 'Completed'
+        FAILED = 'FAILED', 'Failed'
+        CANCELLED = 'CANCELLED', 'Cancelled'
+
+    class AspectRatio(models.TextChoices):
+        VERTICAL = '9:16', 'Vertical 9:16'
+        LANDSCAPE = '16:9', 'Landscape 16:9'
+
+    title = models.CharField(max_length=255, default='Untitled POV Story')
+    script = models.TextField(blank=True, default='')
+    voice = models.CharField(max_length=80, default='af_heart')
+    aspect_ratio = models.CharField(max_length=8, choices=AspectRatio.choices, default=AspectRatio.VERTICAL)
+    scenes_data = models.JSONField(default=list, blank=True)
+    narration_audio = models.FileField(upload_to='studio/narration_audio/', blank=True, null=True)
+    output_video = models.FileField(upload_to='studio/narration_videos/', blank=True, null=True)
+    duration_seconds = models.FloatField(default=0)
+    render_status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    error_message = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.title} ({len(self.scenes_data or [])} scenes)'
+
+
 class LongMixProject(models.Model):
     class TransitionCurve(models.TextChoices):
         QSIN = 'qsin', 'Smooth Quarter-Sine / Equal-Power (Recommended)'
@@ -329,10 +362,9 @@ class ShortVideoProject(models.Model):
         part_label = f"Part {chop_index + 1}"
         rendered_title = str(chop.get('title') or chop.get('ai_title', '')).strip()
         if rendered_title and rendered_title.lower() != part_label.lower():
-            base_title = self.yt_video_title.strip() if self.yt_video_title else self.title
-            if rendered_title.lower() == str(base_title).lower():
-                return rendered_title[:100]
-            return f"{base_title} - {rendered_title}"[:100]
+            # The generated moment title is the title of this clip, not a suffix
+            # to the original long-form video's title.
+            return rendered_title[:100]
         hook = chop.get('hook_text', '').strip()
         # Use original YouTube video title if available, otherwise project title
         base_title = self.yt_video_title.strip() if self.yt_video_title else self.title

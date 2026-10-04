@@ -22,6 +22,10 @@
 
     <!-- Studio Hero & Mode Switcher -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <a href="{% url 'narration_maker' %}" class="glass-panel p-5 rounded-2xl hover:border-violet-500/60 transition-colors group relative overflow-hidden">
+            <div class="flex items-start justify-between"><div class="w-9 h-9 rounded-xl bg-violet-500/15 text-violet-200 flex items-center justify-center"><i data-lucide="mic-2" class="w-4 h-4"></i></div><span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-violet-500/15 text-violet-200">Narration</span></div>
+            <div class="mt-4"><h3 class="text-xs font-bold text-white">POV Narration Studio</h3><p class="text-[11px] text-zinc-400 mt-1">Match AI images to your script, create Kokoro narration, and add cinematic motion.</p></div>
+        </a>
         <!-- Card 1: Synced Lyric Video Generator -->
         <a href="{% url 'lyrics_maker' %}" class="glass-panel p-5 rounded-2xl hover:border-zinc-700 transition-colors group relative overflow-hidden">
             <div class="flex items-start justify-between">

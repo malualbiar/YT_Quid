@@ -294,6 +294,11 @@
                     <span class="nav-text">Shorts Maker</span>
                 </a>
 
+                <a href="{% url 'narration_maker' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if 'narration' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
+                    <i data-lucide="mic-2" class="w-4 h-4 text-white shrink-0"></i>
+                    <span class="nav-text">POV Narration Studio</span>
+                </a>
+
                 <a href="{% url 'mix_maker' %}" onclick="closeMobileSidebar()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all {% if 'mix' in request.resolver_match.url_name %}bg-zinc-800 text-white shadow-sm{% else %}text-zinc-400 hover:text-white hover:bg-zinc-800/50{% endif %}">
                     <i data-lucide="disc-3" class="w-4 h-4 text-white shrink-0"></i>
                     <span class="nav-text">Non-Stop Mix Studio</span>

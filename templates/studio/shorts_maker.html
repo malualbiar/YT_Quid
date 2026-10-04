@@ -345,7 +345,7 @@
                     <!-- Main Video / Audio Player -->
                     <div class="space-y-3">
                         <div class="rounded-xl overflow-hidden bg-black border border-zinc-800 aspect-video relative flex items-center justify-center shadow-lg">
-                            <video id="sourceVideoPlayer" controls class="w-full h-full object-contain hidden"></video>
+                            <video id="sourceVideoPlayer" controls preload="metadata" class="w-full h-full object-contain hidden"></video>
                             <audio id="sourceAudioPlayer" controls class="w-4/5 hidden z-10"></audio>
 
                             <div id="playerPlaceholder" class="text-center p-6 space-y-2">
@@ -1566,6 +1566,48 @@
         renderChopsList();
     }
 
+    function waitForPreviewMedia(player) {
+        if (player.readyState >= HTMLMediaElement.HAVE_METADATA) return Promise.resolve();
+
+        // A source set just before Gemini returns can still be in NETWORK_EMPTY.
+        // Explicitly load it so moment previews work for uploads and local YouTube media.
+        if (player.networkState === HTMLMediaElement.NETWORK_EMPTY) player.load();
+
+        return new Promise((resolve, reject) => {
+            const timeout = window.setTimeout(() => finish(new Error('The source video did not become ready for preview.')), 12000);
+            const finish = (error) => {
+                window.clearTimeout(timeout);
+                player.removeEventListener('loadedmetadata', onReady);
+                player.removeEventListener('canplay', onReady);
+                player.removeEventListener('error', onError);
+                error ? reject(error) : resolve();
+            };
+            const onReady = () => finish();
+            const onError = () => finish(new Error('Could not load the source video.'));
+            player.addEventListener('loadedmetadata', onReady, { once: true });
+            player.addEventListener('canplay', onReady, { once: true });
+            player.addEventListener('error', onError, { once: true });
+        });
+    }
+
+    function seekPreviewTo(player, targetTime) {
+        if (Math.abs(player.currentTime - targetTime) <= 0.05) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            const timeout = window.setTimeout(() => finish(new Error('Could not seek to this clip.')), 8000);
+            const finish = (error) => {
+                window.clearTimeout(timeout);
+                player.removeEventListener('seeked', onSeeked);
+                player.removeEventListener('error', onError);
+                error ? reject(error) : resolve();
+            };
+            const onSeeked = () => finish();
+            const onError = () => finish(new Error('Could not seek the source video.'));
+            player.addEventListener('seeked', onSeeked, { once: true });
+            player.addEventListener('error', onError, { once: true });
+            player.currentTime = targetTime;
+        });
+    }
+
     // Preview Single Chop in Video Player
     async function previewChop(idx) {
         const chop = chopsData[idx];
@@ -1581,45 +1623,21 @@
         currentActiveChopId = null;
         player.pause();
 
-        if (player.readyState < HTMLMediaElement.HAVE_METADATA) {
-            try {
-                await new Promise((resolve, reject) => {
-                    const onLoadedMetadata = () => {
-                        cleanup();
-                        resolve();
-                    };
-                    const onError = () => {
-                        cleanup();
-                        reject(new Error('Could not load the source video.'));
-                    };
-                    const cleanup = () => {
-                        player.removeEventListener('loadedmetadata', onLoadedMetadata);
-                        player.removeEventListener('error', onError);
-                    };
-                    player.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
-                    player.addEventListener('error', onError, { once: true });
-                });
-            } catch (error) {
-                AppToast.error(error.message);
-                return;
-            }
+        try {
+            await waitForPreviewMedia(player);
+        } catch (error) {
+            AppToast.error(error.message);
+            return;
         }
         if (requestId !== previewRequestId) return;
 
-        const targetTime = Math.max(0, Number(chop.start_seconds) || 0);
-        if (Math.abs(player.currentTime - targetTime) > 0.05) {
-            await new Promise(resolve => {
-                const onSeeked = () => {
-                    player.removeEventListener('seeked', onSeeked);
-                    resolve();
-                };
-                player.addEventListener('seeked', onSeeked, { once: true });
-                player.currentTime = targetTime;
-                if (!player.seeking && Math.abs(player.currentTime - targetTime) <= 0.05) {
-                    player.removeEventListener('seeked', onSeeked);
-                    resolve();
-                }
-            });
+        const maxTime = Number.isFinite(player.duration) ? Math.max(0, player.duration - 0.05) : Number(chop.start_seconds) || 0;
+        const targetTime = Math.min(maxTime, Math.max(0, Number(chop.start_seconds) || 0));
+        try {
+            await seekPreviewTo(player, targetTime);
+        } catch (error) {
+            AppToast.error(error.message);
+            return;
         }
         if (requestId !== previewRequestId) return;
 

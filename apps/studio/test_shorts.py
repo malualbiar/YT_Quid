@@ -69,7 +69,8 @@ class ShortVideoProjectTestCase(TestCase):
             ]
         )
 
-        self.assertIn("The Hook Nobody Expected", project.youtube_title_for_chop(0))
+        self.assertEqual(project.youtube_title_for_chop(0), "The Hook Nobody Expected")
+        self.assertNotIn("Original Song Breakdown", project.youtube_title_for_chop(0))
         self.assertNotIn("Part 1", project.youtube_title_for_chop(0))
         self.assertIn("The_Hook_Nobody_Expected", project.export_filename_for_chop(0))
 

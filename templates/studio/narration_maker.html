@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+
+{% block title %}POV Narration Studio - YT Quid{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto space-y-6 pb-20">
+    <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+        <div>
+            <p class="text-[10px] uppercase tracking-[.2em] text-violet-300 font-bold">Narrative Studio</p>
+            <h2 class="text-2xl font-bold text-white mt-1">POV Voice Narration</h2>
+            <p class="text-xs text-zinc-400 mt-1">Turn AI images and a script into a paced, narrated story video.</p>
+        </div>
+        <a href="{% url 'studio_home' %}" class="text-xs text-zinc-400 hover:text-white">← Creator Studio</a>
+    </div>
+
+    <form id="narrationForm" class="space-y-5" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <section class="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
+                <div class="flex items-center gap-2"><span class="w-6 h-6 rounded-lg bg-violet-500/20 text-violet-300 text-xs font-bold flex items-center justify-center">1</span><h3 class="text-sm font-bold text-white">Story & voice</h3></div>
+                <input name="title" required maxlength="255" placeholder="e.g. POV: You wake up in 2099" class="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-violet-500">
+                <textarea id="scriptInput" name="script" required rows="12" placeholder="Paste your script here. Separate scenes with blank lines, or the studio will split it into logical narration beats." class="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-3 text-sm text-zinc-200 leading-relaxed placeholder-zinc-500 focus:outline-none focus:border-violet-500"></textarea>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="text-[11px] text-zinc-400">Kokoro voice<select name="voice" class="mt-1.5 w-full rounded-lg bg-zinc-950 border border-zinc-800 p-2 text-xs text-white">{% for value, label in voices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+                    <label class="text-[11px] text-zinc-400">Format<select name="aspect_ratio" class="mt-1.5 w-full rounded-lg bg-zinc-950 border border-zinc-800 p-2 text-xs text-white"><option value="9:16">9:16 vertical</option><option value="16:9">16:9 landscape</option></select></label>
+                </div>
+            </section>
+
+            <section class="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
+                <div class="flex items-center gap-2"><span class="w-6 h-6 rounded-lg bg-violet-500/20 text-violet-300 text-xs font-bold flex items-center justify-center">2</span><h3 class="text-sm font-bold text-white">AI image scenes</h3></div>
+                <label id="imageDropzone" class="min-h-48 rounded-xl border-2 border-dashed border-zinc-700 hover:border-violet-400 bg-zinc-950/70 cursor-pointer flex flex-col items-center justify-center text-center p-6 transition-colors">
+                    <i data-lucide="images" class="w-7 h-7 text-violet-300 mb-2"></i>
+                    <span class="text-sm font-semibold text-zinc-200">Drop AI-generated images here</span>
+                    <span class="text-[11px] text-zinc-500 mt-1">PNG, JPG, or WebP · select several at once</span>
+                    <input id="imageInput" type="file" name="scene_images" accept="image/png,image/jpeg,image/webp" multiple class="hidden">
+                </label>
+                <div id="imageCount" class="text-[11px] text-zinc-500">No images selected.</div>
+                <p class="text-[11px] text-zinc-500 leading-relaxed">Images are paired to script scenes in order. You can edit each assignment before rendering.</p>
+            </section>
+        </div>
+
+        <section class="p-5 rounded-2xl bg-zinc-900 border border-zinc-800">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div><h3 class="text-sm font-bold text-white">3. Scene plan</h3><p class="text-[11px] text-zinc-500 mt-1">Script beats are synchronized with your images. Choose a camera movement for every scene.</p></div>
+                <button id="organizeScenes" type="button" class="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-100">Organize scenes</button>
+            </div>
+            <div id="scenePlan" class="grid grid-cols-1 md:grid-cols-2 gap-3"><p class="text-xs text-zinc-500 py-8 text-center md:col-span-2">Paste a script and add images, then choose “Organize scenes.”</p></div>
+        </section>
+
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-violet-500/10 border border-violet-500/25 p-4">
+            <p id="renderStatus" class="text-xs text-violet-100">Kokoro will generate each voice segment, then the renderer adds cinematic zoom and pan movements.</p>
+            <button id="renderButton" type="submit" class="px-5 py-2.5 rounded-xl bg-violet-400 hover:bg-violet-300 text-zinc-950 text-xs font-bold">Generate narrated video</button>
+        </div>
+        <input id="scenesJson" type="hidden" name="scenes_json">
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const scriptInput = document.getElementById('scriptInput');
+const imageInput = document.getElementById('imageInput');
+const scenePlan = document.getElementById('scenePlan');
+const imageCount = document.getElementById('imageCount');
+let sceneData = [];
+
+function scriptBeats(script) {
+    const paragraphs = script.trim().split(/\n\s*\n/).map(value => value.trim()).filter(Boolean);
+    if (paragraphs.length > 1) return paragraphs;
+    return script.trim().split(/(?<=[.!?])\s+/).map(value => value.trim()).filter(Boolean);
+}
+function fileUrl(index) { return URL.createObjectURL(imageInput.files[index]); }
+function renderScenes() {
+    scenePlan.replaceChildren();
+    if (!sceneData.length) { scenePlan.innerHTML = '<p class="text-xs text-zinc-500 py-8 text-center md:col-span-2">No scenes yet.</p>'; return; }
+    sceneData.forEach((scene, index) => {
+        const card = document.createElement('article');
+        card.className = 'flex gap-3 p-3 rounded-xl border border-zinc-800 bg-zinc-950';
+        const image = document.createElement('img'); image.src = fileUrl(scene.image_index); image.className = 'w-20 h-28 object-cover rounded-lg bg-zinc-900'; image.alt = `Scene ${index + 1}`;
+        const content = document.createElement('div'); content.className = 'min-w-0 flex-1 space-y-2';
+        content.innerHTML = `<div class="flex items-center justify-between gap-2"><span class="text-[10px] font-bold uppercase tracking-wider text-violet-300">Scene ${index + 1}</span><div class="flex gap-1"><select class="movement bg-zinc-900 border border-zinc-700 rounded px-1.5 py-1 text-[10px] text-zinc-200"><option value="zoom_in">Zoom in</option><option value="zoom_out">Zoom out</option></select><select class="effect bg-zinc-900 border border-zinc-700 rounded px-1.5 py-1 text-[10px] text-zinc-200"><option value="cinematic">Cinematic</option><option value="soft">Soft</option></select></div></div><textarea class="scene-text w-full min-h-16 bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-[11px] leading-relaxed text-zinc-200"></textarea>`;
+        content.querySelector('.scene-text').value = scene.text;
+        content.querySelector('.scene-text').addEventListener('input', event => { sceneData[index].text = event.target.value; });
+        const movement = content.querySelector('.movement'); movement.value = scene.movement; movement.addEventListener('change', event => { sceneData[index].movement = event.target.value; });
+        const effect = content.querySelector('.effect'); effect.value = scene.effect; effect.addEventListener('change', event => { sceneData[index].effect = event.target.value; });
+        card.append(image, content); scenePlan.appendChild(card);
+    });
+}
+function organizeScenes() {
+    const beats = scriptBeats(scriptInput.value);
+    if (!beats.length || !imageInput.files.length) { document.getElementById('renderStatus').textContent = 'Add both a script and at least one image first.'; return; }
+    sceneData = beats.map((text, index) => ({ text, image_index: Math.min(index, imageInput.files.length - 1), movement: index % 2 ? 'zoom_out' : 'zoom_in', effect: 'cinematic' }));
+    renderScenes();
+}
+imageInput.addEventListener('change', () => { imageCount.textContent = `${imageInput.files.length} image${imageInput.files.length === 1 ? '' : 's'} ready for scene matching.`; if (scriptInput.value.trim()) organizeScenes(); });
+document.getElementById('organizeScenes').addEventListener('click', organizeScenes);
+document.getElementById('imageDropzone').addEventListener('dragover', event => { event.preventDefault(); event.currentTarget.classList.add('border-violet-400'); });
+document.getElementById('imageDropzone').addEventListener('dragleave', event => event.currentTarget.classList.remove('border-violet-400'));
+document.getElementById('imageDropzone').addEventListener('drop', event => { event.preventDefault(); imageInput.files = event.dataTransfer.files; imageInput.dispatchEvent(new Event('change')); });
+document.getElementById('narrationForm').addEventListener('submit', async event => {
+    event.preventDefault(); if (!sceneData.length) organizeScenes(); if (!sceneData.length) return;
+    const button = document.getElementById('renderButton'); button.disabled = true; button.textContent = 'Starting render…';
+    document.getElementById('scenesJson').value = JSON.stringify(sceneData);
+    const response = await fetch('{% url "narration_render" %}', { method: 'POST', body: new FormData(event.currentTarget), headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value } });
+    const data = await response.json();
+    if (data.success) window.location.href = data.redirect_url;
+    else { document.getElementById('renderStatus').textContent = data.error || 'Could not start the render.'; button.disabled = false; button.textContent = 'Generate narrated video'; }
+});
+</script>
+{% endblock %}

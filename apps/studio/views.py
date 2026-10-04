@@ -13,17 +13,19 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_GET, require_POST
 from django.contrib import messages
 from django.core.files import File
+from django.core.files.storage import default_storage
 from django.http import HttpResponse, JsonResponse, FileResponse, StreamingHttpResponse
 from django.urls import reverse
 from django.db import connections
 
-from .models import VideoProject, LongMixProject, ShortVideoProject, ShortVideoAnalysis, ShortVideoMoment, LyricVideoProject
+from .models import VideoProject, LongMixProject, ShortVideoProject, ShortVideoAnalysis, ShortVideoMoment, LyricVideoProject, NarrationVideoProject
 from .services.renderer import VideoStudioRenderer
 from .services.mix_engine import MixEngineService
 from .services.shorts_engine import ShortsEngineService
 from .services.lyrics_engine import LyricsEngineService
 from .services.process_tracker import RenderProcessTracker
 from .services.gemini_video_analyzer import analysis_limits
+from .services.narration_engine import NarrationEngineService, NarrationEngineError
 from apps.videos.models import Video
 
 @login_required
@@ -40,6 +42,7 @@ def studio_home_view(request):
     mix_projects = LongMixProject.objects.all().order_by('-created_at')
     short_projects = ShortVideoProject.objects.all().order_by('-created_at')
     lyric_projects = LyricVideoProject.objects.all().order_by('-created_at')
+    narration_projects = NarrationVideoProject.objects.all().order_by('-created_at')
     
     total_mix_duration = sum(m.duration_seconds for m in mix_projects)
     total_loop_duration = sum(p.duration_seconds for p in single_loops)
@@ -55,10 +58,123 @@ def studio_home_view(request):
         'mix_projects': mix_projects,
         'short_projects': short_projects,
         'lyric_projects': lyric_projects,
+        'narration_projects': narration_projects,
         'total_shorts_count': total_shorts_count,
         'total_hours_produced': total_hours_produced,
         'format_choices': VideoProject.VideoFormat.choices,
     })
+
+
+@login_required
+def narration_maker_view(request):
+    if not request.user.is_super_admin:
+        messages.error(request, 'Access denied. Super Admin privileges required.')
+        return redirect('dashboard')
+    return render(request, 'studio/narration_maker.html', {
+        'voices': [('af_heart', 'Heart (US Female)'), ('af_bella', 'Bella (US Female)'), ('am_adam', 'Adam (US Male)'), ('am_michael', 'Michael (US Male)')],
+    })
+
+
+def _narration_scenes_from_request(request, project):
+    try:
+        requested_scenes = json.loads(request.POST.get('scenes_json', '[]'))
+    except json.JSONDecodeError as exc:
+        raise NarrationEngineError('The scene plan is invalid. Reorganize the scenes and try again.') from exc
+    images = request.FILES.getlist('scene_images')
+    if not images:
+        raise NarrationEngineError('Add at least one AI-generated image.')
+    if not isinstance(requested_scenes, list) or not requested_scenes:
+        raise NarrationEngineError('Create scenes from your script before rendering.')
+
+    scenes = []
+    for index, raw_scene in enumerate(requested_scenes):
+        image_index = raw_scene.get('image_index', index) if isinstance(raw_scene, dict) else index
+        try:
+            image = images[int(image_index)]
+        except (IndexError, TypeError, ValueError):
+            raise NarrationEngineError(f'Scene {index + 1} does not have a valid image.')
+        text = str(raw_scene.get('text', '')).strip()
+        if not text:
+            raise NarrationEngineError(f'Scene {index + 1} needs narration text.')
+        saved_name = default_storage.save(f'studio/narration_images/{project.pk}/{image.name}', image)
+        scenes.append({
+            'id': index + 1,
+            'text': text,
+            'image_name': saved_name,
+            'image_url': default_storage.url(saved_name),
+            'movement': str(raw_scene.get('movement', 'zoom_in')),
+            'effect': str(raw_scene.get('effect', 'cinematic')),
+        })
+    return scenes
+
+
+def _execute_narration_render(project_id):
+    connections.close_all()
+    try:
+        project = NarrationVideoProject.objects.get(pk=project_id)
+        scenes = [dict(scene, image_path=default_storage.path(scene['image_name'])) for scene in project.scenes_data]
+        output_dir = os.path.join(settings.MEDIA_ROOT, 'studio', 'narration_output', str(project.pk))
+        video_path = os.path.join(output_dir, 'narrated_story.mp4')
+        audio_path = os.path.join(output_dir, 'narration.wav')
+        RenderProcessTracker.clear_cancelled('narration', project.pk)
+        RenderProcessTracker.set_progress('narration', project.pk, 5, 'Generating Kokoro narration...')
+
+        def report(done, total, message):
+            RenderProcessTracker.set_progress('narration', project.pk, 10 + int(done * 80 / max(total, 1)), message)
+
+        duration = NarrationEngineService.render(scenes, project.voice, project.aspect_ratio, video_path, audio_path, report)
+        if RenderProcessTracker.is_cancelled('narration', project.pk):
+            project.render_status = NarrationVideoProject.Status.CANCELLED
+            project.save(update_fields=['render_status', 'updated_at'])
+            return
+        project.scenes_data = [{key: value for key, value in scene.items() if key != 'image_path'} for scene in scenes]
+        with open(video_path, 'rb') as video_file, open(audio_path, 'rb') as audio_file:
+            project.output_video.save(f'narrated_story_{project.pk}.mp4', File(video_file), save=False)
+            project.narration_audio.save(f'narration_{project.pk}.wav', File(audio_file), save=False)
+        project.duration_seconds = duration
+        project.render_status = NarrationVideoProject.Status.COMPLETED
+        project.error_message = ''
+        project.save()
+        RenderProcessTracker.set_progress('narration', project.pk, 100, 'POV narration video ready!')
+    except Exception as exc:
+        project = NarrationVideoProject.objects.filter(pk=project_id).first()
+        if project:
+            project.render_status = NarrationVideoProject.Status.FAILED
+            project.error_message = str(exc)
+            project.save(update_fields=['render_status', 'error_message', 'updated_at'])
+        RenderProcessTracker.set_progress('narration', project_id, 100, f'Render failed: {exc}')
+    finally:
+        connections.close_all()
+
+
+@login_required
+@require_POST
+def narration_render_view(request):
+    if not request.user.is_super_admin:
+        return JsonResponse({'error': 'Super Admin privileges required.'}, status=403)
+    project = NarrationVideoProject.objects.create(
+        title=request.POST.get('title', '').strip()[:255] or 'Untitled POV Story',
+        script=request.POST.get('script', '').strip(),
+        voice=request.POST.get('voice', 'af_heart').strip(),
+        aspect_ratio=request.POST.get('aspect_ratio', NarrationVideoProject.AspectRatio.VERTICAL),
+        render_status=NarrationVideoProject.Status.RENDERING,
+    )
+    try:
+        project.scenes_data = _narration_scenes_from_request(request, project)
+        project.save(update_fields=['scenes_data', 'updated_at'])
+    except NarrationEngineError as exc:
+        project.delete()
+        return JsonResponse({'error': str(exc)}, status=400)
+    threading.Thread(target=_execute_narration_render, args=(project.pk,), daemon=True).start()
+    return JsonResponse({'success': True, 'project_id': project.pk, 'redirect_url': reverse('narration_detail', kwargs={'pk': project.pk})})
+
+
+@login_required
+def narration_detail_view(request, pk):
+    if not request.user.is_super_admin:
+        messages.error(request, 'Access denied. Super Admin privileges required.')
+        return redirect('dashboard')
+    return render(request, 'studio/narration_detail.html', {'project': get_object_or_404(NarrationVideoProject, pk=pk)})
 
 
 @login_required
@@ -2022,7 +2138,7 @@ def lyrics_ai_transcribe_api(request):
 def studio_cancel_render_view(request, project_type, pk):
     """
     Cancels an in-progress video rendering job for any project type
-    (shorts, lyrics, mix, loop).
+    (shorts, lyrics, narration, mix, loop).
     """
     if not request.user.is_super_admin:
         return JsonResponse({'error': 'Super Admin privileges required.'}, status=403)
@@ -2030,6 +2146,7 @@ def studio_cancel_render_view(request, project_type, pk):
     model_map = {
         'shorts': ShortVideoProject,
         'lyrics': LyricVideoProject,
+        'narration': NarrationVideoProject,
         'mix': LongMixProject,
         'loop': VideoProject,
     }
@@ -2067,6 +2184,7 @@ def studio_render_progress_view(request, project_type, pk):
     model_map = {
         'shorts': (ShortVideoProject, 'shorts_detail'),
         'lyrics': (LyricVideoProject, 'lyrics_detail'),
+        'narration': (NarrationVideoProject, 'narration_detail'),
         'mix': (LongMixProject, 'mix_detail'),
         'loop': (VideoProject, 'studio_home'),
     }

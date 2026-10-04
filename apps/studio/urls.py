@@ -6,6 +6,9 @@ urlpatterns = [
     # Single 1-Hour Loop / Visualizer routes
     path('studio/', views.studio_home_view, name='studio_home'),
     path('studio/render/', views.studio_render_view, name='studio_render'),
+    path('studio/narration/', views.narration_maker_view, name='narration_maker'),
+    path('studio/narration/render/', views.narration_render_view, name='narration_render'),
+    path('studio/narration/<int:pk>/', views.narration_detail_view, name='narration_detail'),
     path('studio/<int:pk>/delete/', views.studio_delete_view, name='studio_delete'),
 
     # Non-Stop Continuous Long Mix Maker routes

@@ -7,7 +7,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
 from apps.authentication.models import User
-from apps.studio.models import VideoProject
+from apps.studio.models import VideoProject, NarrationVideoProject
 from apps.studio.services.renderer import VideoStudioRenderer
 
 class StudioViewsTestCase(TestCase):
@@ -27,6 +27,22 @@ class StudioViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Creator Studio')
         self.assertContains(response, '1-Hour Study / Chill Loop')
+        self.assertContains(response, 'POV Narration Studio')
+
+    def test_narration_maker_requires_images_when_starting_a_render(self):
+        response = self.client.get(reverse('narration_maker'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Drop AI-generated images here')
+        self.assertContains(response, 'Kokoro voice')
+
+        response = self.client.post(reverse('narration_render'), {
+            'title': 'POV Test',
+            'script': 'The train was empty.',
+            'scenes_json': '[{"text": "The train was empty.", "image_index": 0}]',
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Add at least one AI-generated image', response.json()['error'])
+        self.assertFalse(NarrationVideoProject.objects.exists())
 
     @patch.object(VideoStudioRenderer, 'render_visualizer')
     def test_studio_render_view(self, mock_render_vis):

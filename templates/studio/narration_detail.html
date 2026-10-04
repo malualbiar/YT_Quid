@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}{{ project.title }} - Narration Studio{% endblock %}
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6 pb-20">
+  <div class="flex items-end justify-between gap-3"><div><p class="text-[10px] uppercase tracking-[.2em] text-violet-300 font-bold">POV narration</p><h2 class="text-2xl font-bold text-white mt-1">{{ project.title }}</h2></div><a href="{% url 'narration_maker' %}" class="px-3 py-2 rounded-xl bg-zinc-800 text-xs text-white">New video</a></div>
+  <section class="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 space-y-4">
+    {% if project.render_status == 'COMPLETED' and project.output_video %}<video controls class="w-full max-h-[70vh] rounded-xl bg-black"><source src="{{ project.output_video.url }}" type="video/mp4"></video><a class="inline-flex px-3 py-2 rounded-lg bg-violet-400 text-zinc-950 text-xs font-bold" href="{{ project.output_video.url }}" download>Download video</a>{% elif project.render_status == 'FAILED' %}<p class="text-sm text-rose-300">Render failed: {{ project.error_message }}</p><a href="{% url 'narration_maker' %}" class="text-xs text-violet-300">Return to editor</a>{% else %}<p class="text-sm text-zinc-300">Rendering {{ project.scenes_data|length }} scene{{ project.scenes_data|length|pluralize }} with Kokoro narration and cinematic movement…</p><meta http-equiv="refresh" content="4">{% endif %}
+  </section>
+  <section class="grid grid-cols-1 sm:grid-cols-2 gap-3">{% for scene in project.scenes_data %}<article class="p-3 rounded-xl bg-zinc-900 border border-zinc-800 flex gap-3"><img class="w-16 h-20 object-cover rounded" src="{{ scene.image_url }}"><div><p class="text-[10px] font-bold text-violet-300">SCENE {{ scene.id }}</p><p class="text-xs text-zinc-300 mt-1">{{ scene.text }}</p></div></article>{% endfor %}</section>
+</div>
+{% endblock %}

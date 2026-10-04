@@ -130,7 +130,10 @@ STEP 3 – SCORE & SELECT: Identify the strongest moments for viral shorts. Look
 
 For each moment return:
   start, end  — seconds RELATIVE to the start of THIS segment
-  title       — punchy viral title (max 60 chars)
+  title       — accurate standalone title for this exact clip (max 60 chars).
+                This becomes the clip's published title, so describe only what
+                actually happens or is said. Do not prepend the original video
+                title, invent context, or make unsupported clickbait claims.
   description — what happens, why it works as a short
   category    — one of: humor | reaction | educational | skill | opinion | story | fail | win | highlight
   reason      — specific evidence from the video that makes it viral-worthy
