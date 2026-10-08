@@ -2,6 +2,7 @@ import os
 import json
 import hashlib
 import logging
+import re
 from django.conf import settings
 from django.core.cache import cache
 
@@ -72,6 +73,46 @@ class GeminiContentService:
     def _cache_key(cls, *parts):
         raw = '|'.join(str(p) for p in parts)
         return 'gemini_gen_' + hashlib.md5(raw.encode()).hexdigest()
+
+    @staticmethod
+    def _split_pov_script_scenes(script):
+        script = ' '.join((script or '').split())
+        if not script:
+            return []
+
+        sentences = re.findall(r'[^.!?]+[.!?]+(?:["\')\]]+)?|[^.!?]+$', script)
+        scenes = []
+        current_words = []
+        max_words = 18
+
+        for sentence in sentences:
+            clauses = re.split(r'(?<=[,;:—–])\s+', sentence.strip())
+            for clause in clauses:
+                words = clause.split()
+                while words:
+                    available = max_words - len(current_words)
+                    if available == 0:
+                        scenes.append(' '.join(current_words))
+                        current_words = []
+                        available = max_words
+                    current_words.extend(words[:available])
+                    words = words[available:]
+                    if words:
+                        scenes.append(' '.join(current_words))
+                        current_words = []
+
+        if current_words:
+            scenes.append(' '.join(current_words))
+        if len(scenes) <= 50:
+            return scenes
+
+        return [
+            ' '.join(scenes[
+                (index * len(scenes)) // 50:
+                ((index + 1) * len(scenes)) // 50
+            ])
+            for index in range(50)
+        ]
 
     @classmethod
     def _call_gemini(cls, prompt: str) -> dict:
@@ -320,6 +361,51 @@ Return ONLY valid JSON:
         return result
 
     @classmethod
+    def generate_narration_youtube_metadata(cls, script='', working_title=''):
+        """Generate YouTube packaging metadata grounded in the complete narration script."""
+        script = (script or '').strip()
+        if not script:
+            return None
+
+        cache_key = cls._cache_key('narration_youtube_metadata', script, working_title)
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+
+        prompt = f"""You are a YouTube packaging strategist for compelling narrated story videos.
+
+VIDEO SCRIPT:
+{script}
+
+Working title for context (improve it; do not simply repeat it unless it is already best):
+{working_title or 'Untitled'}
+
+Create metadata based on the actual story in the script. Do not invent plot details, outcomes, people, or claims that are not supported by it.
+
+Return ONLY valid JSON with exactly these fields:
+{{
+  "title": "One catchy, curiosity-driven YouTube title, maximum 100 characters, accurate to the script",
+  "description": "A polished YouTube description with a strong opening hook, accurate story summary, natural call to action, and a few relevant hashtags",
+  "thumbnail_prompt": "A detailed image-generation prompt for an attractive 16:9 YouTube thumbnail based on the script's most compelling moment; specify a clear focal subject, expressive emotion, cinematic composition, strong contrast, vivid but cohesive colors, uncluttered background, and no watermark or logos. Request no generated text so the creator can add readable text separately."
+}}"""
+        result = cls._call_gemini(prompt)
+        if not isinstance(result, dict):
+            return None
+
+        metadata = {
+            'title': str(result.get('title', '')).strip(),
+            'description': str(result.get('description', '')).strip(),
+            'thumbnail_prompt': str(result.get('thumbnail_prompt', '')).strip(),
+        }
+        if not all(metadata.values()):
+            logger.error('Gemini returned incomplete YouTube metadata for a narration script.')
+            return None
+
+        metadata['title'] = metadata['title'][:100]
+        cache.set(cache_key, metadata, cls.CACHE_TTL)
+        return metadata
+
+    @classmethod
     def generate_hook_variants(cls, topic='', style='viral', count=3):
         """Generate N standalone hook text options for the hook banner overlay."""
         cache_key = cls._cache_key('hooks', topic, style, count)
@@ -363,3 +449,232 @@ Return ONLY valid JSON:
         if result:
             cache.set(cache_key, result, cls.CACHE_TTL)
         return result
+
+    @classmethod
+    def generate_pov_image_prompts(cls, script='', scenes=None, style='cinematic', aspect_ratio='16:9', generator='gemini'):
+        """
+        Generate AI image prompts for POV narration script scenes.
+        Returns:
+            visual_theme: str
+            style: str
+            generator: str
+            scene_prompts: list of dicts [
+                {
+                    "scene_number": int,
+                    "scene_text": str,
+                    "image_prompt": str,
+                    "negative_prompt": str,
+                    "camera_angle": str,
+                    "lighting": str
+                }
+            ]
+        """
+        scenes = scenes or cls._split_pov_script_scenes(script)
+        cache_key = cls._cache_key('pov_image_prompts', script, str(scenes), style, aspect_ratio, generator)
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+
+        style_descriptions = {
+            'cinematic': 'Dramatic cinematic lighting, 35mm film camera lens, shallow depth of field, anamorphic lens flares, 8k resolution movie screen visual quality.',
+            'photorealistic': 'Hyper-realistic DSLR photography, 8K resolution, highly detailed realistic textures, natural lighting, 50mm f/1.4 lens.',
+            'cyberpunk': 'Neon blue and magenta glow, dark rain-slicked futuristic streets, dark dystopian atmosphere, glowing holograms, chrome details.',
+            'dark_fantasy': 'Moody atmospheric lighting, gothic architecture, misty ethereal glow, intricate dark fantasy oil painting style.',
+            'anime': 'High quality anime screenshot aesthetic, Studio Ghibli or Makoto Shinkai style, vibrant colors, atmospheric background art.',
+            'surreal': 'Dreamlike ethereal atmosphere, impossible physics and geometry, soft volumetric fog, mysterious vibe.',
+            'horror': 'Eerie desaturated palette, deep dark shadows, high film grain, vintage 80s analog horror aesthetic, unsettling atmospheric details.',
+        }
+        style_desc = style_descriptions.get(style, style_descriptions['cinematic'])
+
+        generator_rules = {
+            'gemini': f'Craft clear, highly detailed visual prompts optimized for Google Gemini / Imagen web image generation with aspect ratio {aspect_ratio}.',
+            'midjourney': f'End each image prompt string with Midjourney parameters like --ar {aspect_ratio} --v 6.0 --style raw.',
+            'dalle3': 'Craft detailed natural language prompts formatted for DALL-E 3 / ChatGPT.',
+            'stable_diffusion': 'Include quality boosters like "masterpiece, highly detailed, 8k" and a separate negative_prompt field.',
+            'flux': 'Craft highly descriptive photorealistic prompts optimized for Flux AI.',
+        }
+        gen_rule = generator_rules.get(generator, generator_rules['gemini'])
+
+        if scenes:
+            scene_items = []
+            for i, sc in enumerate(scenes[:50]):
+                text = sc if isinstance(sc, str) else (sc.get('text') if isinstance(sc, dict) else str(sc))
+                scene_items.append(f"Scene {i+1}: {text}")
+            context_body = "EXPLICIT SCENES:\n" + "\n".join(scene_items)
+            scene_count_instruction = (
+                f"Generate exactly {len(scene_items)} scene_prompts, one for each numbered scene above. "
+                "Keep each scene_text faithful to its matching script excerpt; do not merge, skip, reorder, "
+                "or add scenes."
+            )
+        else:
+            context_body = f"FULL SCRIPT:\n{script}"
+            scene_count_instruction = "Create a separate scene prompt for every distinct visual beat in the script, up to 50 scenes."
+
+        prompt = f"""You are an expert AI prompt engineer specializing in POV (Point Of View / First-Person) narrative image prompts for AI image generators (Midjourney, DALL-E 3, Flux, Stable Diffusion).
+
+CONTENT TO PROCESS:
+{context_body}
+
+TARGET VISUAL STYLE: {style} ({style_desc})
+ASPECT RATIO: {aspect_ratio}
+TARGET GENERATOR: {generator} ({gen_rule})
+
+INSTRUCTIONS:
+0. SCENE-BY-SCENE COVERAGE: {scene_count_instruction}
+1. CHARACTER CONSISTENCY ANCHOR:
+   - Identify or define a precise, detailed "Character Visual Anchor" for the main protagonist/narrator appearing across the script.
+   - Specify exact character details: age group, ethnicity, hair style & color, eye color, facial features, clothing/outfit, and signature accessories (e.g. "a 28-year-old male with short dark brown hair, subtle stubble, wearing a worn dark olive jacket and silver wrist watch").
+   - EVERY generated image_prompt MUST explicitly incorporate this exact character description so that AI image generators render the SAME consistent character in every scene.
+
+2. SINGLE STANDALONE IMAGE MANDATE:
+   Each generated image_prompt MUST start with this exact header block:
+"IMPORTANT INSTRUCTION: Generate a single, standalone image for EACH scene listed below. Do NOT combine the scenes into a collage, grid, contact sheet, or split-screen image. Render each image separately one by one.
+
+Aspect Ratio: {aspect_ratio}"
+
+3. PERSPECTIVE & VISUAL DETAILS:
+   - EVERY prompt MUST explicitly represent a First-Person / POV perspective (e.g. "POV shot looking at...", "First-person perspective showing hands wearing...").
+   - Include rich visual details: environment, key objects, camera lens, depth of field, atmospheric lighting, color palette, and mood.
+   - Strictly prohibit collages, split-screens, contact sheets, or grid panels in the visual output.
+   - Provide a matching negative prompt for unwanted artifacts (e.g. "inconsistent character, different face, collage, split-screen, grid, contact sheet, multi-panel, third person, 3d render, low quality, distorted...").
+   - Provide short tags for camera_angle and lighting.
+
+Return ONLY valid JSON matching this exact schema:
+{{
+  "visual_theme": "1-2 sentence overview of the visual style, color palette, and mood across all scenes",
+  "character_anchor": "Exact description of the persistent character (age, hair, clothing, signature features) used across all prompts for 100% visual consistency",
+  "style": "{style}",
+  "generator": "{generator}",
+  "scene_prompts": [
+    {{
+      "scene_number": 1,
+      "scene_text": "Exact text or brief summary of scene 1",
+      "image_prompt": "IMPORTANT INSTRUCTION: Generate a single, standalone image for EACH scene listed below. Do NOT combine the scenes into a collage, grid, contact sheet, or split-screen image. Render each image separately one by one.\\n\\nAspect Ratio: {aspect_ratio}\\n\\nCharacter: The same persistent protagonist (28-year-old male with short dark hair, dark olive jacket). POV shot looking at...",
+      "negative_prompt": "inconsistent character, different face, collage, split-screen, grid, contact sheet, multi-panel, blurry, low res, third-person perspective...",
+      "camera_angle": "First-person eye level",
+      "lighting": "Dramatic cinematic rim lighting"
+    }}
+  ]
+}}"""
+
+        result = cls._call_gemini(prompt)
+        if result and isinstance(result, dict) and 'scene_prompts' in result:
+            scene_prompts = result.get('scene_prompts')
+            invalid_prompts = (
+                not isinstance(scene_prompts, list)
+                or len(scene_prompts) != len(scene_items)
+                or any(
+                    not isinstance(item, dict) or not str(item.get('image_prompt', '')).strip()
+                    for item in scene_prompts
+                )
+            ) if scenes else False
+            if invalid_prompts:
+                logger.error(
+                    'Gemini returned an incomplete POV prompt set (%s prompts for %s requested scenes).',
+                    len(scene_prompts) if isinstance(scene_prompts, list) else 'an invalid number of',
+                    len(scene_items),
+                )
+                return None
+
+            required_header = (
+                "IMPORTANT INSTRUCTION: Generate a single, standalone image for EACH scene listed below. "
+                "Do NOT combine the scenes into a collage, grid, contact sheet, or split-screen image. "
+                f"Render each image separately one by one.\n\nAspect Ratio: {aspect_ratio}"
+            )
+            char_anchor = result.get('character_anchor', '').strip()
+            for index, item in enumerate(scene_prompts):
+                if isinstance(item, dict) and 'image_prompt' in item:
+                    item['scene_number'] = index + 1
+                    if scenes:
+                        source_scene = scenes[index]
+                        item['scene_text'] = (
+                            source_scene if isinstance(source_scene, str)
+                            else source_scene.get('text', '') if isinstance(source_scene, dict)
+                            else str(source_scene)
+                        )
+                    prompt_str = item['image_prompt'].strip()
+                    if "IMPORTANT INSTRUCTION: Generate a single" not in prompt_str:
+                        char_prefix = f"Character Anchor: {char_anchor}\n\n" if char_anchor and char_anchor.lower() not in prompt_str.lower() else ""
+                        item['image_prompt'] = f"{required_header}\n\n{char_prefix}{prompt_str}"
+            cache.set(cache_key, result, cls.CACHE_TTL)
+        return result
+
+    @classmethod
+    def structure_script_into_scenes(cls, script=''):
+        """
+        Analyze raw script and intelligently break it down into coherent visual POV scenes with Gemini.
+        Returns dict with key 'scenes': list of dicts [{ "scene_number": int, "text": str, "visual_summary": str }]
+        """
+        script = (script or '').strip()
+        if not script:
+            return {'scenes': []}
+
+        cache_key = cls._cache_key('structure_script_scenes', script[:600])
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+
+        prompt = f"""You are an expert story director and video editor specializing in POV (Point Of View) video narratives.
+
+RAW SCRIPT:
+{script}
+
+INSTRUCTIONS:
+1. Intelligently structure and split the raw script into distinct, well-paced visual scenes.
+2. Each scene should represent a clear narrative beat, action change, or location transition suitable for a standalone image and narration clip.
+3. Keep the narration text for each scene natural, engaging, and well-balanced (1 to 3 sentences per scene beat).
+4. Do NOT drop or omit any narrative content from the original story.
+
+Return ONLY valid JSON matching this schema:
+{{
+  "scenes": [
+    {{
+      "scene_number": 1,
+      "text": "Exact script text for scene 1",
+      "visual_summary": "Brief visual context summary of scene 1"
+    }}
+  ]
+}}"""
+
+        result = cls._call_gemini(prompt)
+        if result and isinstance(result, dict) and 'scenes' in result:
+            cache.set(cache_key, result, cls.CACHE_TTL)
+            return result
+        return {'scenes': []}
+
+    @classmethod
+    def reorder_scenes_by_narrative_logic(cls, scene_texts: list[str]) -> list[int]:
+        """
+        Given a list of scene narration texts (already numbered/split), ask Gemini to
+        return the optimal narrative order as a 0-based index list.
+        e.g. scene_texts = ["Scene 3 text", "Scene 1 text", "Scene 2 text"]
+             returns [1, 2, 0] meaning: put original index 1 first, then 2, then 0.
+        """
+        if not scene_texts:
+            return list(range(len(scene_texts)))
+
+        numbered = '\n'.join(f'[{i}] {t}' for i, t in enumerate(scene_texts))
+        n = len(scene_texts)
+
+        prompt = f"""You are a professional video editor and storytelling expert.
+Below are {n} scene narration clips, labelled [0] through [{n - 1}].
+They may be out of narrative order.
+
+SCENES:
+{numbered}
+
+TASK:
+Determine the best chronological / narrative order for these scenes.
+Return ONLY a JSON object with key "order" whose value is an array of the original [0-based] indices in the optimal order.
+Do NOT include any explanation — only JSON.
+
+Example for 4 scenes: {{ "order": [2, 0, 3, 1] }}"""
+
+        result = cls._call_gemini(prompt)
+        if result and isinstance(result, dict) and 'order' in result:
+            order = result['order']
+            # Validate: must be a permutation of range(n)
+            if isinstance(order, list) and sorted(order) == list(range(n)):
+                return order
+        # Fallback: return original order
+        return list(range(n))

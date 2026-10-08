@@ -3,108 +3,2606 @@
 {% block title %}POV Narration Studio - YT Quid{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto space-y-6 pb-20">
-    <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-        <div>
-            <p class="text-[10px] uppercase tracking-[.2em] text-violet-300 font-bold">Narrative Studio</p>
-            <h2 class="text-2xl font-bold text-white mt-1">POV Voice Narration</h2>
-            <p class="text-xs text-zinc-400 mt-1">Turn AI images and a script into a paced, narrated story video.</p>
+<style>
+@keyframes captionPopKeyframe {
+  0% { transform: scale(1.22) translateY(-2px); opacity: 0.85; }
+  100% { transform: scale(1.0) translateY(0); opacity: 1.0; }
+}
+</style>
+<div class="max-w-7xl mx-auto space-y-5 pb-24">
+
+  {# ── Header ─────────────────────────────────────────────────────────────── #}
+  <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+    <div>
+      <p class="text-[10px] uppercase tracking-[.2em] text-violet-300 font-bold">Narrative Studio</p>
+      <h2 class="text-2xl font-bold text-white mt-1">POV Voice Narration</h2>
+      <p class="text-xs text-zinc-400 mt-1">Paste a script to split it into short visual beats, then generate one image prompt per beat (up to 50).</p>
+    </div>
+    <a href="{% url 'studio_home' %}" class="text-xs text-zinc-400 hover:text-white">← Creator Studio</a>
+  </div>
+
+  <form id="narrationForm" enctype="multipart/form-data">
+    {% csrf_token %}
+    <input id="scenesJson" type="hidden" name="scenes_json">
+
+    {# ── Main Layout: Compact Side Settings (Left) + Large Cinema Preview Player (Right) ── #}
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-6 items-start">
+
+      {# ── Left Side Panel: Compact Settings (lg:col-span-5) ────────────────── #}
+      <div class="lg:col-span-5 space-y-4">
+
+        {# 1. Script & AI Scene Structuring #}
+        <div class="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3 shadow-lg">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-5 h-5 rounded-md bg-violet-500/20 text-violet-300 text-[10px] font-bold flex items-center justify-center">1</span>
+              <h3 class="text-sm font-bold text-white">Story Script</h3>
+            </div>
+            <span id="sceneDetectBadge" class="hidden text-[10px] px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-300 font-semibold"></span>
+          </div>
+
+          <input name="title" required maxlength="255" placeholder="e.g. POV: You wake up in 2099"
+            class="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-violet-500">
+          
+          <textarea id="scriptInput" name="script" required rows="6"
+            placeholder="Paste your story script here. Click 'AI Scene Structure' or let Gemini break it down into visual beats automatically."
+            class="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2.5 text-xs text-zinc-200 leading-relaxed placeholder-zinc-500 focus:outline-none focus:border-violet-500 font-sans"></textarea>
+
+          <div class="flex items-center justify-between gap-2 pt-1">
+            <button id="btnAiStructureScript" type="button" class="text-xs px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-bold flex items-center gap-1.5 transition-all shadow-md shadow-violet-600/20">
+              <span id="btnAiStructureText">AI Scene Structure (Gemini)</span>
+            </button>
+
+            <div class="flex items-center gap-1.5">
+              <button id="btnOpenPromptsModal" type="button" class="text-[11px] px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-violet-500/20 text-violet-300 border border-violet-500/30 font-semibold flex items-center transition-all">
+                AI Prompts
+              </button>
+              <button id="btnAutoDetect" type="button" class="text-[10px] px-2 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 transition-colors" title="Manual rule detection">
+                Auto-detect
+              </button>
+            </div>
+          </div>
         </div>
-        <a href="{% url 'studio_home' %}" class="text-xs text-zinc-400 hover:text-white">← Creator Studio</a>
+
+        {# ── Narration Style Presets ── #}
+        <div class="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3 shadow-lg">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-5 h-5 rounded-md bg-amber-500/20 text-amber-300 text-[10px] font-bold flex items-center justify-center">★</span>
+              <h3 class="text-sm font-bold text-white">Narration Style Presets</h3>
+            </div>
+            <span class="text-[10px] text-zinc-400">1-Click voice, captions & visual animations</span>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <!-- Preset 1: MrBeast Hype -->
+            <button type="button" data-preset="mrbeast" class="narration-preset-btn p-2.5 rounded-xl border border-amber-500/60 bg-amber-500/10 hover:border-amber-400 text-left transition-all group active-preset shadow-sm shadow-amber-500/10">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-amber-400 group-hover:text-amber-300">Viral Hype</span>
+                <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+              </div>
+              <p class="text-[10px] text-zinc-400 mt-1">MrBeast Yellow · Energetic Voice · Fast Zoom</p>
+            </button>
+
+            <!-- Preset 2: Cyberpunk Neon -->
+            <button type="button" data-preset="cyberpunk" class="narration-preset-btn p-2.5 rounded-xl border border-zinc-800 bg-zinc-950 hover:border-cyan-500 text-left transition-all group">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-cyan-400 group-hover:text-cyan-300">Cyberpunk Thriller</span>
+                <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+              </div>
+              <p class="text-[10px] text-zinc-400 mt-1">Neon Cyan · Deep Sci-Fi Voice · Pan Right</p>
+            </button>
+
+            <!-- Preset 3: Dark Crime Mystery -->
+            <button type="button" data-preset="dark_crime" class="narration-preset-btn p-2.5 rounded-xl border border-zinc-800 bg-zinc-950 hover:border-purple-500 text-left transition-all group">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-purple-400 group-hover:text-purple-300">Dark Mystery</span>
+                <span class="w-2 h-2 rounded-full bg-purple-400"></span>
+              </div>
+              <p class="text-[10px] text-zinc-400 mt-1">Dark Pill Box · Dramatic Voice · Zoom Out</p>
+            </button>
+
+            <!-- Preset 4: Cinematic Doc -->
+            <button type="button" data-preset="cinematic_doc" class="narration-preset-btn p-2.5 rounded-xl border border-zinc-800 bg-zinc-950 hover:border-zinc-400 text-left transition-all group">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-zinc-200 group-hover:text-white">Documentary</span>
+                <span class="w-2 h-2 rounded-full bg-zinc-400"></span>
+              </div>
+              <p class="text-[10px] text-zinc-400 mt-1">Cinematic Minimal · British Voice · Pan Left</p>
+            </button>
+
+            <!-- Preset 5: Fire Punch Action -->
+            <button type="button" data-preset="fire_action" class="narration-preset-btn p-2.5 rounded-xl border border-zinc-800 bg-zinc-950 hover:border-orange-500 text-left transition-all group">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-orange-400 group-hover:text-orange-300">Action Punch</span>
+                <span class="w-2 h-2 rounded-full bg-orange-400"></span>
+              </div>
+              <p class="text-[10px] text-zinc-400 mt-1">Fire Punch Orange · Authoritative Voice · Fast Zoom</p>
+            </button>
+
+            <!-- Preset 6: Classic White -->
+            <button type="button" data-preset="classic_white" class="narration-preset-btn p-2.5 rounded-xl border border-zinc-800 bg-zinc-950 hover:border-emerald-500 text-left transition-all group">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-emerald-400 group-hover:text-emerald-300">Classic Clean</span>
+                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              </div>
+              <p class="text-[10px] text-zinc-400 mt-1">Classic Bold White · Warm Voice · Static/Pan</p>
+            </button>
+          </div>
+        </div>
+
+        {# 2. Voice Selector + Voice Audition Preview #}
+        <div class="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3 shadow-lg">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-5 h-5 rounded-md bg-violet-500/20 text-violet-300 text-[10px] font-bold flex items-center justify-center">2</span>
+              <h3 class="text-sm font-bold text-white">Voice & Format</h3>
+            </div>
+            <button id="btnAuditionVoice" type="button" class="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-semibold flex items-center transition-all shadow-sm">
+              <span id="btnAuditionText">Audition Voice</span>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="block text-[11px] font-semibold text-zinc-400">Neural voice
+              <select name="voice" id="voiceSelect" class="mt-1 w-full rounded-xl bg-zinc-950 border border-zinc-800 p-2 text-xs text-white focus:outline-none focus:border-violet-500">
+                {% for value, label in voices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+              </select>
+            </label>
+
+            <label class="block text-[11px] font-semibold text-zinc-400">Aspect Ratio
+              <select name="aspect_ratio" id="aspectSelect" class="mt-1 w-full rounded-xl bg-zinc-950 border border-zinc-800 p-2 text-xs text-white focus:outline-none focus:border-violet-500">
+                <option value="16:9" selected>16:9 Landscape (YouTube)</option>
+                <option value="9:16">9:16 Vertical (Shorts/TikTok)</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        {# 3. Subtitles & Captions Settings #}
+        <div class="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3 shadow-lg">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-5 h-5 rounded-md bg-amber-500/20 text-amber-300 text-[10px] font-bold flex items-center justify-center">3</span>
+              <h3 class="text-sm font-bold text-white">Subtitles & Captions</h3>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" name="show_captions" id="chkShowCaptions" checked class="sr-only peer">
+              <div class="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+            </label>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div>
+              <label class="block text-[11px] font-semibold text-zinc-400 mb-1">Caption Style</label>
+              <select name="caption_style" id="captionStyleSelect" class="w-full rounded-xl bg-zinc-950 border border-zinc-800 p-2 text-xs text-white focus:outline-none focus:border-amber-500">
+                <option value="BEAST_YELLOW">MrBeast Yellow</option>
+                <option value="NEON_CYAN">Cyber Neon Cyan</option>
+                <option value="FIRE_PUNCH">Fire Punch Orange</option>
+                <option value="CLEAN_WHITE">Classic Bold White</option>
+                <option value="CINEMATIC">Cinematic Minimal</option>
+                <option value="BOXED_DARK">Dark Pill Box</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-semibold text-zinc-400 mb-1">Position</label>
+              <select name="caption_position" id="captionPosSelect" class="w-full rounded-xl bg-zinc-950 border border-zinc-800 p-2 text-xs text-white focus:outline-none focus:border-amber-500">
+                <option value="BOTTOM">Bottom Third</option>
+                <option value="CENTER">Center Focal</option>
+                <option value="TOP">Top Header</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-semibold text-zinc-400 mb-1">Font Size</label>
+              <select name="caption_font_size" id="captionFontSizeSelect" class="w-full rounded-xl bg-zinc-950 border border-zinc-800 p-2 text-xs text-white focus:outline-none focus:border-amber-500">
+                <option value="36">Small (36px)</option>
+                <option value="48" selected>Medium (48px)</option>
+                <option value="64">Large (64px)</option>
+                <option value="80">Extra Large (80px)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {# 4. Scene Images Dropzone #}
+        <div class="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-2.5 shadow-lg">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-5 h-5 rounded-md bg-violet-500/20 text-violet-300 text-[10px] font-bold flex items-center justify-center">4</span>
+              <h3 class="text-sm font-bold text-white">Scene Images</h3>
+            </div>
+            <span id="imageCount" class="text-[10px] text-zinc-400 font-mono">No images selected</span>
+          </div>
+
+          <label id="imageDropzone" class="min-h-28 rounded-xl border-2 border-dashed border-zinc-700 hover:border-violet-400 bg-zinc-950/70
+            cursor-pointer flex flex-col items-center justify-center text-center p-3 transition-colors">
+            <span class="text-xs font-semibold text-zinc-200">Drop images here</span>
+            <span class="text-[10px] text-zinc-500 mt-0.5">PNG · JPG · WebP — up to 50 images; images pair to script scenes</span>
+            <input id="imageInput" type="file" name="scene_images" accept="image/png,image/jpeg,image/webp" multiple class="hidden">
+          </label>
+        </div>
+
+      </div>
+
+      {# ── Right Side Panel: Large Cinema Preview Player (lg:col-span-7) ───────── #}
+      <div class="lg:col-span-7 p-5 rounded-2xl bg-zinc-900 border border-zinc-800 flex flex-col items-center gap-4 shadow-2xl">
+        
+        <div class="flex items-center justify-between w-full border-b border-zinc-800/80 pb-3">
+          <div class="flex items-center gap-2.5">
+            <div class="w-3 h-3 rounded-full bg-red-500 animate-pulse"></div>
+            <h3 class="text-base font-bold text-white tracking-tight">Narration Cinema Preview</h3>
+            <span id="previewStatusBadge" class="text-[9px] px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-bold border border-emerald-500/30">Ready</span>
+          </div>
+          <span id="previewSceneLabel" class="text-xs font-mono text-zinc-400">No scene selected</span>
+        </div>
+
+        {# High-Def Large Player Viewport #}
+        <div id="previewWrapper" class="relative bg-black rounded-2xl overflow-hidden border border-zinc-800 w-full flex items-center justify-center shadow-2xl transition-all duration-300" style="aspect-ratio:16/9; max-height:520px;">
+          <canvas id="previewCanvas" class="w-full h-full object-contain hidden"></canvas>
+          <div id="previewEmpty" class="flex flex-col items-center gap-3 text-zinc-600 p-8 text-center">
+            <div>
+              <p class="text-sm font-bold text-zinc-300">POV Video Studio Preview</p>
+              <p class="text-xs text-zinc-500 mt-1 max-w-xs">Paste your script on the left, click "AI Scene Structure", and audition your narration video here.</p>
+            </div>
+          </div>
+          
+          {# Subtitle / Caption Overlay #}
+          <div id="previewSubtitleOverlay" class="hidden absolute bottom-5 inset-x-4 pointer-events-none text-center">
+            <span id="previewSubtitleText" class="inline-block px-4 py-2 rounded-xl bg-black/80 backdrop-blur-md text-yellow-300 font-bold text-xs sm:text-sm shadow-2xl leading-snug border border-yellow-500/30 max-w-[90%]"></span>
+          </div>
+
+          {# Corner Overlay Badges #}
+          <div id="previewOverlay" class="hidden absolute inset-0 pointer-events-none">
+            <div class="absolute top-3 left-3 bg-black/75 backdrop-blur-md text-white text-xs font-bold px-2.5 py-1 rounded-lg border border-white/10" id="previewSceneNum">Scene 1</div>
+            <div class="absolute top-3 right-3 bg-violet-600/80 backdrop-blur-md text-white text-xs font-semibold px-2.5 py-1 rounded-lg shadow-md" id="previewFxBadge">Cinematic</div>
+            <div class="absolute bottom-3 right-3 bg-violet-600/80 backdrop-blur-md text-white text-xs font-semibold px-2.5 py-1 rounded-lg shadow-md" id="previewMovementBadge">Zoom in</div>
+          </div>
+        </div>
+
+        {# Video Playback Controls Bar #}
+        <div class="w-full bg-zinc-950 rounded-xl p-2.5 border border-zinc-800 flex items-center justify-between gap-3 shadow-inner">
+          <div class="flex items-center gap-2">
+            <button id="btnPlayPause" type="button" class="w-9 h-9 rounded-xl bg-violet-500 hover:bg-violet-400 text-white flex items-center justify-center transition-all shadow-md shadow-violet-500/30">
+              <i data-lucide="play" class="w-4 h-4 text-zinc-950 fill-zinc-950" id="playIcon"></i>
+            </button>
+            <button id="btnStepBack" type="button" class="w-8 h-8 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 flex items-center justify-center transition-colors border border-zinc-800" title="-2 Seconds">
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+            </button>
+            <button id="btnStepForward" type="button" class="w-8 h-8 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 flex items-center justify-center transition-colors border border-zinc-800" title="+2 Seconds">
+              <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+
+          <div class="px-3 py-1 rounded-lg bg-zinc-900 border border-zinc-800">
+            <span id="timecodeDisplay" class="font-mono text-xs text-violet-300 font-bold tracking-wider">00:00.0 / 00:00.0</span>
+          </div>
+
+          <button id="btnSynthesizeVoice" type="button" class="px-3 py-1.5 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 border border-violet-500/40 text-xs font-semibold flex items-center transition-all shadow-sm">
+            Synthesize Audio
+          </button>
+        </div>
+
+        {# Scene text preview snippet #}
+        <div id="previewText" class="w-full text-xs text-zinc-300 leading-relaxed line-clamp-3 p-3 rounded-xl bg-zinc-950/60 border border-zinc-800/80 min-h-[3.25rem]">
+          Synthesize voice clips or select any timeline scene below to inspect real-time audio & animation preview.
+        </div>
+      </div>
     </div>
 
-    <form id="narrationForm" class="space-y-5" enctype="multipart/form-data">
-        {% csrf_token %}
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <section class="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
-                <div class="flex items-center gap-2"><span class="w-6 h-6 rounded-lg bg-violet-500/20 text-violet-300 text-xs font-bold flex items-center justify-center">1</span><h3 class="text-sm font-bold text-white">Story & voice</h3></div>
-                <input name="title" required maxlength="255" placeholder="e.g. POV: You wake up in 2099" class="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2.5 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-violet-500">
-                <textarea id="scriptInput" name="script" required rows="12" placeholder="Paste your script here. Separate scenes with blank lines, or the studio will split it into logical narration beats." class="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-3 text-sm text-zinc-200 leading-relaxed placeholder-zinc-500 focus:outline-none focus:border-violet-500"></textarea>
-                <div class="grid grid-cols-2 gap-3">
-                    <label class="text-[11px] text-zinc-400">Kokoro voice<select name="voice" class="mt-1.5 w-full rounded-lg bg-zinc-950 border border-zinc-800 p-2 text-xs text-white">{% for value, label in voices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select></label>
-                    <label class="text-[11px] text-zinc-400">Format<select name="aspect_ratio" class="mt-1.5 w-full rounded-lg bg-zinc-950 border border-zinc-800 p-2 text-xs text-white"><option value="9:16">9:16 vertical</option><option value="16:9">16:9 landscape</option></select></label>
-                </div>
-            </section>
-
-            <section class="p-5 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-4">
-                <div class="flex items-center gap-2"><span class="w-6 h-6 rounded-lg bg-violet-500/20 text-violet-300 text-xs font-bold flex items-center justify-center">2</span><h3 class="text-sm font-bold text-white">AI image scenes</h3></div>
-                <label id="imageDropzone" class="min-h-48 rounded-xl border-2 border-dashed border-zinc-700 hover:border-violet-400 bg-zinc-950/70 cursor-pointer flex flex-col items-center justify-center text-center p-6 transition-colors">
-                    <i data-lucide="images" class="w-7 h-7 text-violet-300 mb-2"></i>
-                    <span class="text-sm font-semibold text-zinc-200">Drop AI-generated images here</span>
-                    <span class="text-[11px] text-zinc-500 mt-1">PNG, JPG, or WebP · select several at once</span>
-                    <input id="imageInput" type="file" name="scene_images" accept="image/png,image/jpeg,image/webp" multiple class="hidden">
-                </label>
-                <div id="imageCount" class="text-[11px] text-zinc-500">No images selected.</div>
-                <p class="text-[11px] text-zinc-500 leading-relaxed">Images are paired to script scenes in order. You can edit each assignment before rendering.</p>
-            </section>
+    {# ── Multi-Track NLE Horizontal Timeline ──────────────────────────────────── #}
+    <section class="rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden shadow-xl">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-950/60">
+        <div class="flex items-center gap-3">
+          <h3 class="text-sm font-bold text-white">Horizontal NLE Timeline</h3>
+          <span id="timelineBadge" class="text-[10px] text-zinc-500">— scenes populate automatically</span>
         </div>
 
-        <section class="p-5 rounded-2xl bg-zinc-900 border border-zinc-800">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                <div><h3 class="text-sm font-bold text-white">3. Scene plan</h3><p class="text-[11px] text-zinc-500 mt-1">Script beats are synchronized with your images. Choose a camera movement for every scene.</p></div>
-                <button id="organizeScenes" type="button" class="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-zinc-100">Organize scenes</button>
-            </div>
-            <div id="scenePlan" class="grid grid-cols-1 md:grid-cols-2 gap-3"><p class="text-xs text-zinc-500 py-8 text-center md:col-span-2">Paste a script and add images, then choose “Organize scenes.”</p></div>
-        </section>
-
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-violet-500/10 border border-violet-500/25 p-4">
-            <p id="renderStatus" class="text-xs text-violet-100">Kokoro will generate each voice segment, then the renderer adds cinematic zoom and pan movements.</p>
-            <button id="renderButton" type="submit" class="px-5 py-2.5 rounded-xl bg-violet-400 hover:bg-violet-300 text-zinc-950 text-xs font-bold">Generate narrated video</button>
+        <div class="flex items-center gap-2">
+          <button id="btnFixSceneOrder" type="button" title="Ask Gemini to suggest the best scene order"
+            class="text-xs px-3 py-1.5 rounded-lg bg-sky-700 hover:bg-sky-600 text-white font-bold flex items-center transition-all shadow-md shadow-sky-600/20">
+            Fix Scene Order (AI)
+          </button>
+          <div class="w-px h-4 bg-zinc-800"></div>
+          <button id="btnSynthesizeAudioAll" type="button" class="text-xs px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-bold flex items-center transition-all shadow-md shadow-violet-600/20">
+            Synthesize Voice Clips
+          </button>
+          <div class="w-px h-4 bg-zinc-800"></div>
+          <button id="btnAddScene" type="button" title="Add blank scene"
+            class="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-semibold text-zinc-200 flex items-center transition-colors">
+            Add Scene
+          </button>
+          <button id="btnClearAll" type="button" title="Clear all scenes"
+            class="p-1.5 rounded-lg bg-zinc-800 hover:bg-red-500/20 text-zinc-400 hover:text-red-400 transition-colors">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
         </div>
-        <input id="scenesJson" type="hidden" name="scenes_json">
-    </form>
+      </div>
+
+      {# Track Labels + Scrollable Timeline Area #}
+      <div class="flex relative select-none">
+        {# Labels Left Column #}
+        <div class="flex flex-col shrink-0 border-r border-zinc-800 text-[10px] text-zinc-400 font-semibold bg-zinc-950/90" style="width:96px">
+          <div class="flex items-center px-3 border-b border-zinc-800 text-zinc-500 uppercase tracking-wider text-[9px]" style="height:28px">Ruler</div>
+          <div class="flex items-center px-3 border-b border-zinc-800 text-violet-400" style="height:100px">
+            Video / Images
+          </div>
+          <div class="flex items-center px-3 border-b border-zinc-800 text-amber-400" style="height:32px">
+            Captions
+          </div>
+          <div class="flex items-center px-3 text-emerald-400" style="height:44px">
+            Voice Audio
+          </div>
+        </div>
+
+        {# Scrollable timeline tracks container #}
+        <div class="overflow-x-auto flex-1 min-w-0 relative bg-zinc-950/40" id="timelineScroll">
+          
+          {# Timeline Ruler Track #}
+          <div id="timelineRuler" class="relative border-b border-zinc-800 bg-zinc-950/70 text-[9px] font-mono text-zinc-500 cursor-pointer select-none" style="height:28px; min-width:100%">
+            <!-- Ruler timestamps rendered via JS -->
+          </div>
+
+          {# Interactive Red Playhead Cursor Line #}
+          <div id="timelinePlayhead" class="absolute top-0 bottom-0 z-30 pointer-events-none flex flex-col items-center" style="left:0px; display:none;">
+            <div class="w-3 h-3 -mt-1 bg-red-500 rotate-45 rounded-sm shadow-md"></div>
+            <div class="w-0.5 flex-1 bg-red-500/90 shadow-sm"></div>
+          </div>
+
+          {# Track 1: Scene Clips (Video / Images / Movements) #}
+          <div id="sceneTrack" class="flex gap-2 p-2 border-b border-zinc-800 items-start relative" style="min-height:100px; min-width:max-content">
+            <p id="timelineEmpty" class="text-xs text-zinc-600 self-center px-6 py-8 whitespace-nowrap">
+              Paste a script above or click "Synthesize Voice Clips" — timeline populates automatically.
+            </p>
+          </div>
+
+          {# Track 2: Subtitles & Overlay Captions #}
+          <div id="subtitleTrack" class="flex gap-2 px-2 py-1 border-b border-zinc-800 items-center relative" style="min-height:32px; min-width:max-content">
+            <!-- Subtitle blocks rendered via JS -->
+          </div>
+
+          {# Track 3: Voice Audio Waveforms & Audio Clips #}
+          <div id="audioTrack" class="flex gap-2 p-2 items-center relative" style="min-height:44px; min-width:max-content">
+            <!-- Audio blocks rendered via JS -->
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    {# ── Render Bar ─────────────────────────────────────────────────────────── #}
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl bg-violet-500/10 border border-violet-500/25 p-4 mt-5">
+      <div>
+        <p id="renderStatus" class="text-xs text-violet-100 font-medium">
+          Tweak scene images, reorder clips, adjust movements & color grades before producing final video.
+        </p>
+        <p class="text-[10px] text-zinc-400 mt-0.5">FFmpeg will compile your exact timeline settings & audio sequence.</p>
+      </div>
+      <button id="renderButton" type="submit"
+        class="shrink-0 px-6 py-3 rounded-xl bg-violet-500 hover:bg-violet-400 text-white text-xs font-bold transition-all shadow-lg shadow-violet-500/25 flex items-center justify-center">
+        <span>Render Final Video</span>
+      </button>
+    </div>
+
+  </form>
+</div>
+
+{# ── Scene Edit Modal (Expanded FX & Movement Settings) ──────────────────────── #}
+<div id="editModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+  <div class="w-full max-w-lg rounded-2xl bg-zinc-900 border border-zinc-700 shadow-2xl p-5 space-y-4">
+    <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+      <div class="flex items-center gap-2">
+        <span class="w-6 h-6 rounded-md bg-violet-500/20 text-violet-300 font-bold text-xs flex items-center justify-center" id="modalSceneNumPill">1</span>
+        <h4 class="text-sm font-bold text-white" id="modalTitle">Edit Scene</h4>
+      </div>
+      <button id="modalClose" type="button" class="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800"><i data-lucide="x" class="w-4 h-4"></i></button>
+    </div>
+
+    {# Image Swap Control #}
+    <div class="space-y-1.5">
+      <label class="text-[11px] text-zinc-400 font-semibold flex items-center justify-between">
+        <span>Scene Image</span>
+        <span class="text-[10px] text-violet-300 cursor-pointer" id="btnTriggerModalImageSwap">Swap Image...</span>
+      </label>
+      <div class="flex items-center gap-3 p-2.5 rounded-xl bg-zinc-950 border border-zinc-800">
+        <img id="modalImagePreview" class="w-12 h-12 rounded-lg object-cover bg-zinc-900 shrink-0 border border-zinc-800" src="" alt="">
+        <div class="flex-1 min-w-0">
+          <p id="modalImageFileName" class="text-xs text-zinc-300 truncate font-mono">Default scene image</p>
+          <input type="file" id="modalImageInput" accept="image/png,image/jpeg,image/webp" class="hidden">
+          <label for="modalImageInput" class="inline-block mt-1 text-[10px] text-violet-400 hover:underline cursor-pointer font-medium">Choose new file</label>
+        </div>
+      </div>
+    </div>
+
+    {# Scene Text & TTS Re-synthesize #}
+    <div class="space-y-1.5">
+      <div class="flex items-center justify-between">
+        <label class="text-[11px] text-zinc-400 font-semibold">Scene Narration Text</label>
+        <button id="btnModalResynthesizeVoice" type="button" class="text-[10px] text-emerald-400 hover:text-emerald-300 font-semibold flex items-center">
+          Re-synthesize Voice
+        </button>
+      </div>
+      <textarea id="modalText" rows="3"
+        class="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2.5 text-sm text-zinc-200 leading-relaxed focus:outline-none focus:border-violet-500"></textarea>
+    </div>
+
+    {# AI Image Prompt #}
+    <div class="space-y-1">
+      <div class="flex items-center justify-between">
+        <label class="text-[11px] text-zinc-400 font-semibold">AI Image Prompt (POV Perspective)</label>
+        <button id="modalCopyPrompt" type="button" class="text-[10px] text-violet-300 hover:text-violet-200 flex items-center font-medium">
+          Copy Prompt
+        </button>
+      </div>
+      <textarea id="modalImagePrompt" rows="2" placeholder="Generated image prompt for Google Gemini website, Midjourney, DALL-E 3..."
+        class="w-full rounded-xl bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-zinc-300 leading-relaxed focus:outline-none focus:border-violet-500 font-mono"></textarea>
+    </div>
+
+    {# Camera Movement & Visual Color Grade #}
+    <div class="grid grid-cols-2 gap-3 pt-1">
+      <div>
+        <label class="block text-[11px] font-semibold text-zinc-400 mb-1">Camera Movement</label>
+        <select id="modalMovement" class="w-full rounded-xl bg-zinc-950 border border-zinc-800 p-2.5 text-xs text-white focus:outline-none focus:border-violet-500">
+          <option value="zoom_in">⬆ Zoom In (Slow Focus)</option>
+          <option value="zoom_out">⬇ Zoom Out (Reveal)</option>
+          <option value="pan_left">⬅ Pan Left (Cinematic Glide)</option>
+          <option value="pan_right">➔ Pan Right (Cinematic Glide)</option>
+          <option value="static">⏸ Static (No Movement)</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-[11px] font-semibold text-zinc-400 mb-1">Action Shake</label>
+        <select id="modalCameraEffect" class="w-full rounded-xl bg-zinc-950 border border-zinc-800 p-2.5 text-xs text-white focus:outline-none focus:border-violet-500">
+          <option value="auto">⚡ Auto on action words</option>
+          <option value="impact_shake">💥 Shake this scene</option>
+          <option value="handheld">🎥 Handheld camera sway</option>
+          <option value="none">⏸ No shake</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-[11px] font-semibold text-zinc-400 mb-1">Atmosphere / Light</label>
+        <select id="modalAtmosphereEffect" class="w-full rounded-xl bg-zinc-950 border border-zinc-800 p-2.5 text-xs text-white focus:outline-none focus:border-violet-500">
+          <option value="auto">✨ Auto from script</option>
+          <option value="none">⏸ None</option>
+          <option value="dust">🌫 Drifting dust</option>
+          <option value="fog">🌁 Fog / mist</option>
+          <option value="sun_rays">🌤 Sun rays</option>
+          <option value="rain">🌧 Rain</option>
+          <option value="snow">❄ Snow</option>
+          <option value="smoke">💨 Smoke</option>
+          <option value="embers">🔥 Embers / sparks</option>
+          <option value="lightning">⚡ Lightning flash</option>
+          <option value="candle_flicker">🕯 Candlelight flicker</option>
+          <option value="glow">💡 Soft glow</option>
+          <option value="flash">✨ Dramatic flash</option>
+          <option value="vignette">🎬 Dramatic vignette</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-[11px] font-semibold text-zinc-400 mb-1">Colour Grade Filter</label>
+        <select id="modalEffect" class="w-full rounded-xl bg-zinc-950 border border-zinc-800 p-2.5 text-xs text-white focus:outline-none focus:border-violet-500">
+          <option value="cinematic">🎬 Cinematic Realism</option>
+          <option value="soft">🌅 Soft Warmth</option>
+          <option value="cyberpunk">🌃 Cyberpunk Neon</option>
+          <option value="vhs">📼 Retro VHS Analog</option>
+          <option value="dark_mood">🏰 Dark Mood & Gothic</option>
+          <option value="vintage">📷 Vintage Sepia</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="flex items-center justify-between pt-2 border-t border-zinc-800">
+      <button id="modalDelete" type="button" class="px-3.5 py-2 rounded-xl bg-red-500/15 hover:bg-red-500/30 text-red-400 text-xs font-bold transition-colors">Delete scene</button>
+      <div class="flex items-center gap-2">
+        <button id="modalCloseBtn" type="button" class="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold transition-colors">Cancel</button>
+        <button id="modalSave" type="button" class="px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold transition-colors shadow-md shadow-violet-600/20">Save Scene</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── AI POV Image Prompt Generator Modal ─────────────────────────────────────── #}
+<div id="promptsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+  <div class="w-full max-w-3xl max-h-[90vh] flex flex-col rounded-2xl bg-zinc-900 border border-zinc-700 shadow-2xl overflow-hidden">
+    
+    {# Modal Header #}
+    <div class="flex items-center justify-between px-5 py-4 border-b border-zinc-800 bg-zinc-950/60">
+      <div>
+        <h4 class="text-sm font-bold text-white">POV AI Image Prompt Generator</h4>
+        <p class="text-[11px] text-zinc-400">Generate first-person scene prompts from script for Google Gemini (Imagen/Gemini Website), ChatGPT, Midjourney & Stable Diffusion</p>
+      </div>
+      <button id="promptsModalClose" type="button" class="text-zinc-400 hover:text-white p-1.5 rounded-lg hover:bg-zinc-800 transition-colors">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+
+    {# Controls Bar #}
+    <div class="p-4 border-b border-zinc-800 bg-zinc-900 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div>
+        <label class="block text-[11px] font-semibold text-zinc-400 mb-1">Visual Aesthetic Style</label>
+        <select id="promptStyleSelect" class="w-full rounded-xl bg-zinc-950 border border-zinc-800 p-2.5 text-xs text-white focus:outline-none focus:border-violet-500">
+          <option value="cinematic">🎬 Cinematic Realism (Movie Still)</option>
+          <option value="photorealistic">📷 Photorealistic 8K (DSLR 50mm)</option>
+          <option value="cyberpunk">🌃 Cyberpunk & Sci-Fi Neon</option>
+          <option value="dark_fantasy">🏰 Dark Fantasy & Gothic</option>
+          <option value="anime">🎨 Anime & Manga Art (Studio Ghibli)</option>
+          <option value="surreal">🌌 Surreal & Dreamlike</option>
+          <option value="horror">👻 Vintage VHS Horror & Eerie</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-[11px] font-semibold text-zinc-400 mb-1">Target Image AI Generator</label>
+        <select id="promptGeneratorSelect" class="w-full rounded-xl bg-zinc-950 border border-zinc-800 p-2.5 text-xs text-white focus:outline-none focus:border-violet-500">
+          <option value="gemini" selected>Google Gemini (Imagen / Gemini Website)</option>
+          <option value="midjourney">Midjourney (--ar 16:9 / --v 6.0)</option>
+          <option value="dalle3">DALL-E 3 / ChatGPT</option>
+          <option value="flux">Flux AI Photorealistic</option>
+          <option value="stable_diffusion">Stable Diffusion (Masterpiece)</option>
+        </select>
+      </div>
+      <div class="flex items-end">
+        <button id="btnRunGeneratePrompts" type="button" class="w-full py-2.5 px-4 rounded-xl bg-violet-500 hover:bg-violet-400 text-white font-bold text-xs flex items-center justify-center transition-all shadow-lg shadow-violet-500/20">
+          <span id="btnRunPromptsText">Generate Prompts with Gemini</span>
+        </button>
+      </div>
+    </div>
+
+    {# Results Body #}
+    <div class="flex-1 overflow-y-auto p-5 space-y-4 bg-zinc-950/40" id="promptsResultContainer">
+      <div id="promptsEmptyState" class="flex flex-col items-center justify-center py-12 text-center space-y-2">
+        <div>
+          <p class="text-xs font-semibold text-zinc-300">No prompts generated yet</p>
+          <p class="text-[11px] text-zinc-500 mt-1 max-w-sm">Ensure your script is entered, select your preferred visual style and target generator, then click "Generate Prompts".</p>
+        </div>
+      </div>
+
+      <div id="promptsLoadingState" class="hidden flex flex-col items-center justify-center py-12 text-center space-y-3">
+        <div class="w-8 h-8 rounded-full border-2 border-violet-500 border-t-transparent animate-spin"></div>
+        <p class="text-xs text-violet-300 font-semibold animate-pulse">Analyzing POV script & engineering AI image prompts with Gemini...</p>
+      </div>
+
+      <div id="promptsContent" class="hidden space-y-4">
+        {# Theme overview banner #}
+        <div id="promptsThemeBanner" class="p-3.5 rounded-xl bg-violet-500/10 border border-violet-500/20 text-xs text-violet-200 flex items-start">
+          <div>
+            <span class="font-bold text-violet-100">Visual Theme: </span>
+            <span id="promptsThemeText"></span>
+          </div>
+        </div>
+
+        {# Action row #}
+        <div class="flex items-center justify-between gap-2 pb-1">
+          <span id="promptsCountBadge" class="text-[11px] text-zinc-400 font-medium"></span>
+          <div class="flex items-center gap-2">
+            <button id="btnCopyAllPrompts" type="button" class="text-xs px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-semibold flex items-center transition-colors">
+              Copy All Prompts
+            </button>
+            <button id="btnApplyPromptsToTimeline" type="button" class="text-xs px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-semibold flex items-center transition-colors">
+              Apply to Timeline Scenes
+            </button>
+          </div>
+        </div>
+
+        {# Prompt cards list #}
+        <div id="promptsCardsList" class="space-y-3"></div>
+      </div>
+    </div>
+
+  </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-const scriptInput = document.getElementById('scriptInput');
-const imageInput = document.getElementById('imageInput');
-const scenePlan = document.getElementById('scenePlan');
-const imageCount = document.getElementById('imageCount');
-let sceneData = [];
+/* ============================================================
+   POV NARRATOR NLE TIMELINE & LIVE PREVIEW ENGINE
+============================================================ */
 
-function scriptBeats(script) {
-    const paragraphs = script.trim().split(/\n\s*\n/).map(value => value.trim()).filter(Boolean);
-    if (paragraphs.length > 1) return paragraphs;
-    return script.trim().split(/(?<=[.!?])\s+/).map(value => value.trim()).filter(Boolean);
+// ── State ───────────────────────────────────────────────────
+let sceneData   = [];   // [{text, image_index, image_url, custom_image_file, movement, effect, audio_url, audio_path, duration_seconds, image_prompt}, ...]
+const MAX_NARRATION_SCENES = 50;
+let activeScene = 0;    // Index of currently selected/active scene
+let editTarget  = null; // Index of scene being edited in modal
+let dragFrom    = null; // Drag & drop source index
+let resizeState = null; // { index, edge:'left'|'right', startX, startDuration, prevDuration }
+
+// Live Preview Player State
+let isPlaying = false;
+let currentTime = 0;     // Current timecode in seconds across full timeline
+let totalDuration = 0;   // Sum of all scene durations
+let animFrameId = null;
+let currentAudio = null; // Active HTML5 Audio object playing current scene
+let sceneAudioMap = {};  // Cached HTML5 Audio objects per scene audio_url
+
+// ── DOM Elements ────────────────────────────────────────────
+const scriptInput            = document.getElementById('scriptInput');
+const imageInput             = document.getElementById('imageInput');
+const sceneTrack             = document.getElementById('sceneTrack');
+const subtitleTrack          = document.getElementById('subtitleTrack');
+const audioTrack             = document.getElementById('audioTrack');
+const timelineRuler          = document.getElementById('timelineRuler');
+const timelinePlayhead       = document.getElementById('timelinePlayhead');
+const timelineScroll         = document.getElementById('timelineScroll');
+const timelineEmpty          = document.getElementById('timelineEmpty');
+const timelineBadge          = document.getElementById('timelineBadge');
+const detectBadge            = document.getElementById('sceneDetectBadge');
+const renderStatus           = document.getElementById('renderStatus');
+
+// Canvas Preview & Controls
+const previewWrapper         = document.getElementById('previewWrapper');
+const previewCanvas          = document.getElementById('previewCanvas');
+const previewCanvasCtx       = previewCanvas ? previewCanvas.getContext('2d') : null;
+const previewEmpty           = document.getElementById('previewEmpty');
+const previewOverlay         = document.getElementById('previewOverlay');
+const previewSceneNum        = document.getElementById('previewSceneNum');
+const previewFxBadge         = document.getElementById('previewFxBadge');
+const previewMovementBadge   = document.getElementById('previewMovementBadge');
+const previewSceneLabel      = document.getElementById('previewSceneLabel');
+const previewSubtitleOverlay = document.getElementById('previewSubtitleOverlay');
+const previewSubtitleText    = document.getElementById('previewSubtitleText');
+const previewText            = document.getElementById('previewText');
+const previewStatusBadge     = document.getElementById('previewStatusBadge');
+const timecodeDisplay        = document.getElementById('timecodeDisplay');
+const btnPlayPause           = document.getElementById('btnPlayPause');
+const playIcon               = document.getElementById('playIcon');
+const btnStepBack            = document.getElementById('btnStepBack');
+const btnStepForward         = document.getElementById('btnStepForward');
+const btnSynthesizeVoice     = document.getElementById('btnSynthesizeVoice');
+const btnSynthesizeAudioAll  = document.getElementById('btnSynthesizeAudioAll');
+const aspectSelect           = document.getElementById('aspectSelect');
+
+// Modal Elements
+const editModal              = document.getElementById('editModal');
+const modalTitle             = document.getElementById('modalTitle');
+const modalSceneNumPill      = document.getElementById('modalSceneNumPill');
+const modalText              = document.getElementById('modalText');
+const modalImagePrompt       = document.getElementById('modalImagePrompt');
+const modalMovement          = document.getElementById('modalMovement');
+const modalCameraEffect      = document.getElementById('modalCameraEffect');
+const modalAtmosphereEffect  = document.getElementById('modalAtmosphereEffect');
+const modalEffect             = document.getElementById('modalEffect');
+const modalImagePreview      = document.getElementById('modalImagePreview');
+const modalImageFileName     = document.getElementById('modalImageFileName');
+const modalImageInput        = document.getElementById('modalImageInput');
+const btnModalResynthesize   = document.getElementById('btnModalResynthesizeVoice');
+
+/* ============================================================
+   SCENE PARSER (SMART PARSING)
+============================================================ */
+function detectScenes(script) {
+  const raw = script.trim();
+  if (!raw) return [];
+
+  // Strategy 1: markdown headings ### SCENE 1
+  const mdHeadingRe = /\n(?=#{1,4}\s*(?:scene\s*\d+|int\.|ext\.|act\s*\d+))/i;
+  if (mdHeadingRe.test('\n' + raw)) {
+    return raw.split(/\n(?=#{1,4}\s)/i).map(block => {
+      const lines = block.split('\n');
+      return lines.filter(l => !/^#{1,4}\s/.test(l.trim())).join('\n').trim();
+    }).filter(Boolean);
+  }
+
+  // Strategy 2: scene headings
+  const plainHeadingSplit = raw.split(/\n(?=[\s\-–—]*(?:scene\s*\d+|scene\s*:|int\.|ext\.|\[scene\]))/i)
+    .map(s => s.replace(/^[\s\-–—]*(?:scene\s*\d+[:\-–—]?[^\n]*|scene\s*:[^\n]*|int\.[^\n]*|ext\.[^\n]*|\[scene\][^\n]*)\n?/i, '').trim())
+    .filter(Boolean);
+  if (plainHeadingSplit.length > 1) return plainHeadingSplit;
+
+  // Strategy 3: blank-line separated paragraphs
+  const paragraphs = raw.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+  if (paragraphs.length > 1) return paragraphs;
+
+  // Strategy 4: numbered lines
+  const bulletLines = raw.split(/\n/).filter(l => /^[\d]+\.\s|^[-•]\s/.test(l.trim()));
+  if (bulletLines.length > 1) return bulletLines.map(l => l.replace(/^[\d]+\.\s|^[-•]\s/, '').trim()).filter(Boolean);
+
+  // Strategy 5: sentence split
+  return raw.split(/(?<=[.!?])\s+(?=[A-Z])/).map(s => s.trim()).filter(Boolean);
 }
-function fileUrl(index) { return URL.createObjectURL(imageInput.files[index]); }
-function renderScenes() {
-    scenePlan.replaceChildren();
-    if (!sceneData.length) { scenePlan.innerHTML = '<p class="text-xs text-zinc-500 py-8 text-center md:col-span-2">No scenes yet.</p>'; return; }
-    sceneData.forEach((scene, index) => {
-        const card = document.createElement('article');
-        card.className = 'flex gap-3 p-3 rounded-xl border border-zinc-800 bg-zinc-950';
-        const image = document.createElement('img'); image.src = fileUrl(scene.image_index); image.className = 'w-20 h-28 object-cover rounded-lg bg-zinc-900'; image.alt = `Scene ${index + 1}`;
-        const content = document.createElement('div'); content.className = 'min-w-0 flex-1 space-y-2';
-        content.innerHTML = `<div class="flex items-center justify-between gap-2"><span class="text-[10px] font-bold uppercase tracking-wider text-violet-300">Scene ${index + 1}</span><div class="flex gap-1"><select class="movement bg-zinc-900 border border-zinc-700 rounded px-1.5 py-1 text-[10px] text-zinc-200"><option value="zoom_in">Zoom in</option><option value="zoom_out">Zoom out</option></select><select class="effect bg-zinc-900 border border-zinc-700 rounded px-1.5 py-1 text-[10px] text-zinc-200"><option value="cinematic">Cinematic</option><option value="soft">Soft</option></select></div></div><textarea class="scene-text w-full min-h-16 bg-zinc-900 border border-zinc-800 rounded-lg p-2 text-[11px] leading-relaxed text-zinc-200"></textarea>`;
-        content.querySelector('.scene-text').value = scene.text;
-        content.querySelector('.scene-text').addEventListener('input', event => { sceneData[index].text = event.target.value; });
-        const movement = content.querySelector('.movement'); movement.value = scene.movement; movement.addEventListener('change', event => { sceneData[index].movement = event.target.value; });
-        const effect = content.querySelector('.effect'); effect.value = scene.effect; effect.addEventListener('change', event => { sceneData[index].effect = event.target.value; });
-        card.append(image, content); scenePlan.appendChild(card);
-    });
+
+function splitScriptIntoScenes(beats) {
+  const text = (Array.isArray(beats) ? beats : [beats]).map(part => String(part || '').trim()).filter(Boolean).join(' ');
+  if (!text) return [];
+
+  const sentences = (text.match(/[^.!?]+[.!?]+(?:["')\]]+)?|[^.!?]+$/g) || [text])
+    .map(sentence => sentence.trim())
+    .filter(Boolean);
+  const maxWordsPerScene = 18;
+  const sceneTexts = [];
+  let currentParts = [];
+  let currentWordCount = 0;
+
+  const addPart = part => {
+    const words = part.trim().split(/\s+/);
+    for (let start = 0; start < words.length; start += maxWordsPerScene) {
+      const fragment = words.slice(start, start + maxWordsPerScene).join(' ');
+      const fragmentWordCount = Math.min(maxWordsPerScene, words.length - start);
+      if (currentWordCount + fragmentWordCount > maxWordsPerScene) {
+        sceneTexts.push(currentParts.join(' '));
+        currentParts = [];
+        currentWordCount = 0;
+      }
+      currentParts.push(fragment);
+      currentWordCount += fragmentWordCount;
+      if (start + maxWordsPerScene < words.length) {
+        sceneTexts.push(currentParts.join(' '));
+        currentParts = [];
+        currentWordCount = 0;
+      }
+    }
+    if (scene.camera_effect === 'handheld') {
+      const sway = localTime * 30;
+      scale = Math.max(scale, 1.04);
+      panX += Math.sin(sway * 0.7) * cw * 0.004;
+      panY += Math.sin(sway * 0.91) * ch * 0.004;
+    }
+  };
+
+  sentences.forEach(sentence => {
+    sentence.split(/(?<=[,;:—–])\s+/).filter(Boolean).forEach(addPart);
+  });
+  if (currentParts.length) sceneTexts.push(currentParts.join(' '));
+
+  if (sceneTexts.length <= MAX_NARRATION_SCENES) return sceneTexts;
+  return Array.from({ length: MAX_NARRATION_SCENES }, (_, index) => {
+    const start = Math.floor(index * sceneTexts.length / MAX_NARRATION_SCENES);
+    const end = Math.floor((index + 1) * sceneTexts.length / MAX_NARRATION_SCENES);
+    return sceneTexts.slice(start, end).join(' ');
+  });
 }
-function organizeScenes() {
-    const beats = scriptBeats(scriptInput.value);
-    if (!beats.length || !imageInput.files.length) { document.getElementById('renderStatus').textContent = 'Add both a script and at least one image first.'; return; }
-    sceneData = beats.map((text, index) => ({ text, image_index: Math.min(index, imageInput.files.length - 1), movement: index % 2 ? 'zoom_out' : 'zoom_in', effect: 'cinematic' }));
-    renderScenes();
+
+/* ============================================================
+   IMAGE RESOLUTION & WEAKMAP CACHING HELPER
+============================================================ */
+const fileUrlCache = new WeakMap();
+
+function getFileObjectUrl(file) {
+  if (!file) return '';
+  if (fileUrlCache.has(file)) {
+    return fileUrlCache.get(file);
+  }
+  const url = URL.createObjectURL(file);
+  fileUrlCache.set(file, url);
+  return url;
 }
-imageInput.addEventListener('change', () => { imageCount.textContent = `${imageInput.files.length} image${imageInput.files.length === 1 ? '' : 's'} ready for scene matching.`; if (scriptInput.value.trim()) organizeScenes(); });
-document.getElementById('organizeScenes').addEventListener('click', organizeScenes);
-document.getElementById('imageDropzone').addEventListener('dragover', event => { event.preventDefault(); event.currentTarget.classList.add('border-violet-400'); });
-document.getElementById('imageDropzone').addEventListener('dragleave', event => event.currentTarget.classList.remove('border-violet-400'));
-document.getElementById('imageDropzone').addEventListener('drop', event => { event.preventDefault(); imageInput.files = event.dataTransfer.files; imageInput.dispatchEvent(new Event('change')); });
-document.getElementById('narrationForm').addEventListener('submit', async event => {
-    event.preventDefault(); if (!sceneData.length) organizeScenes(); if (!sceneData.length) return;
-    const button = document.getElementById('renderButton'); button.disabled = true; button.textContent = 'Starting render…';
-    document.getElementById('scenesJson').value = JSON.stringify(sceneData);
-    const response = await fetch('{% url "narration_render" %}', { method: 'POST', body: new FormData(event.currentTarget), headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value } });
-    const data = await response.json();
-    if (data.success) window.location.href = data.redirect_url;
-    else { document.getElementById('renderStatus').textContent = data.error || 'Could not start the render.'; button.disabled = false; button.textContent = 'Generate narrated video'; }
+
+function getSceneImageUrl(scene, index) {
+  if (scene.custom_image_file) {
+    return getFileObjectUrl(scene.custom_image_file);
+  }
+  if (scene.custom_image_url) return scene.custom_image_url;
+  if (scene.image_url) return scene.image_url;
+  
+  const files = imageInput.files;
+  if (!files || !files.length) return '';
+  const idx = typeof scene.image_index === 'number' ? scene.image_index : index;
+  const clamped = Math.min(idx, files.length - 1);
+  return getFileObjectUrl(files[clamped]);
+}
+
+/* ============================================================
+   TIMELINE COMPUTATIONS
+============================================================ */
+function calculateTimeline() {
+  let accum = 0;
+  totalDuration = 0;
+  sceneData.forEach(scene => {
+    // Default estimated duration if audio not yet synthesized (e.g., 4s minimum)
+    if (!scene.duration_seconds || scene.duration_seconds <= 0) {
+      const words = scene.text ? scene.text.split(/\s+/).length : 6;
+      scene.duration_seconds = Math.max(3.0, roundVal(words * 0.38, 1));
+    }
+    scene.start_time = accum;
+    scene.end_time = accum + scene.duration_seconds;
+    accum += scene.duration_seconds;
+  });
+  totalDuration = accum;
+  updateTimecodeUI();
+}
+
+function roundVal(v, dec = 2) {
+  const m = Math.pow(10, dec);
+  return Math.round(v * m) / m;
+}
+
+function formatTimecode(secs) {
+  const s = Math.max(0, secs);
+  const mins = Math.floor(s / 60);
+  const remainderSecs = (s % 60).toFixed(1);
+  return `${String(mins).padStart(2, '0')}:${remainderSecs.padStart(4, '0')}`;
+}
+
+function updateTimecodeUI() {
+  if (timecodeDisplay) {
+    timecodeDisplay.textContent = `${formatTimecode(currentTime)} / ${formatTimecode(totalDuration)}`;
+  }
+}
+
+/* ============================================================
+   AUDIO WAVEFORM VISUALIZER
+============================================================ */
+const waveformCache = {}; // url → Float32Array of normalized RMS bars
+
+async function drawWaveformInBlock(audioUrl, container, widthPx, isTooShort) {
+  if (!audioUrl) return;
+
+  // Clamp bar count to clip width
+  const barCount = Math.max(8, Math.floor(widthPx / 4));
+
+  // Fetch + decode if not cached
+  if (!waveformCache[audioUrl]) {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const response = await fetch(audioUrl);
+      const arrayBuffer = await response.arrayBuffer();
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      ctx.close();
+
+      const channelData = audioBuffer.getChannelData(0); // mono
+      const blockSize = Math.floor(channelData.length / barCount);
+      const bars = new Float32Array(barCount);
+      for (let i = 0; i < barCount; i++) {
+        let sum = 0;
+        const start = i * blockSize;
+        for (let j = start; j < start + blockSize; j++) {
+          sum += channelData[j] * channelData[j]; // RMS
+        }
+        bars[i] = Math.sqrt(sum / blockSize);
+      }
+      // Normalize to 0..1
+      const maxVal = Math.max(...bars, 0.001);
+      for (let i = 0; i < barCount; i++) bars[i] = bars[i] / maxVal;
+      waveformCache[audioUrl] = bars;
+    } catch {
+      return; // silently skip if audio can't be decoded
+    }
+  }
+
+  const bars = waveformCache[audioUrl];
+  if (!bars) return;
+
+  // Build SVG
+  const h = 44; // height of audio block
+  const midY = h / 2;
+  const barW = Math.max(1, (widthPx / barCount) - 1);
+  const color = isTooShort ? 'rgba(248,113,113,0.6)' : 'rgba(52,211,153,0.5)';
+  const peakColor = isTooShort ? 'rgba(248,113,113,0.9)' : 'rgba(110,231,183,0.9)';
+
+  let rectsSvg = '';
+  for (let i = 0; i < bars.length; i++) {
+    const barH = Math.max(2, bars[i] * (h - 8));
+    const x = i * (widthPx / barCount);
+    const y = midY - barH / 2;
+    const fillColor = bars[i] > 0.7 ? peakColor : color;
+    rectsSvg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" rx="1" fill="${fillColor}"/>`;
+  }
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${h}" viewBox="0 0 ${widthPx} ${h}" preserveAspectRatio="none">${rectsSvg}</svg>`;
+  container.innerHTML = svg;
+}
+
+/* ============================================================
+   CLIP TRIM-HANDLE RESIZE (global mousemove / mouseup)
+============================================================ */
+const PPX = 28; // pixels-per-second — must match renderTimeline
+const MIN_SCENE_DUR = 1.0; // seconds
+
+
+document.addEventListener('mousemove', e => {
+  if (!resizeState) return;
+  const { index, edge, startX, startDuration, prevDuration } = resizeState;
+  const dx = e.clientX - startX;
+  const deltaSec = dx / PPX;
+
+  if (edge === 'right') {
+    // Stretch / shrink this scene from the right
+    const newDur = Math.max(MIN_SCENE_DUR, roundVal(startDuration + deltaSec, 1));
+    sceneData[index].duration_seconds = newDur;
+  } else {
+    // Drag left edge: shorten/extend this scene AND balance against prev scene
+    if (index === 0) return; // can't left-trim the very first scene
+    const newDur = Math.max(MIN_SCENE_DUR, roundVal(startDuration - deltaSec, 1));
+    const stolen = startDuration - newDur;           // positive = we grew, negative = we shrank
+    const newPrev = Math.max(MIN_SCENE_DUR, roundVal(prevDuration + stolen, 1));
+    sceneData[index].duration_seconds = newDur;
+    sceneData[index - 1].duration_seconds = newPrev;
+  }
+
+  // Live-update just the widths & duration badges without full re-render
+  calculateTimeline();
+  const cards = document.querySelectorAll('.timeline-clip-card');
+  const subBlocks = document.querySelectorAll('.timeline-sub-block');
+  const audioBlocks = document.querySelectorAll('.timeline-audio-block');
+
+  sceneData.forEach((s, i) => {
+    const w = Math.max(110, s.duration_seconds * PPX) + 'px';
+    if (cards[i]) cards[i].style.width = w;
+    if (subBlocks[i]) subBlocks[i].style.width = w;
+    if (audioBlocks[i]) audioBlocks[i].style.width = w;
+    // Update the duration badge inside the card
+    const badge = cards[i] && cards[i].querySelector('.clip-dur-badge');
+    if (badge) badge.textContent = `${s.duration_seconds.toFixed(1)}s`;
+  });
+
+  // Stretch the track rows and ruler
+  const trackW = Math.max(100, totalDuration * PPX) + 'px';
+  if (sceneTrack)    sceneTrack.style.width    = trackW;
+  if (subtitleTrack) subtitleTrack.style.width = trackW;
+  if (audioTrack)    audioTrack.style.width    = trackW;
+  if (timelineRuler) timelineRuler.style.width = trackW;
+  updateTimecodeUI();
+  updatePlayheadPositionUI();
 });
+
+document.addEventListener('mouseup', () => {
+  if (!resizeState) return;
+  // Re-enable dragging on all cards
+  document.querySelectorAll('.timeline-clip-card').forEach(c => { c.draggable = true; });
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+  resizeState = null;
+  // Full re-render to sync everything cleanly
+  renderTimeline();
+});
+
+
+/* ============================================================
+   CANVAS WYSIWYG LIVE PREVIEW ENGINE
+============================================================ */
+let loadedImages = {}; // Cache of loaded Image objects
+
+function preloadSceneImages() {
+  sceneData.forEach((scene, i) => {
+    const url = getSceneImageUrl(scene, i);
+    if (url && !loadedImages[url]) {
+      const img = new Image();
+      img.src = url;
+      loadedImages[url] = img;
+    }
+  });
+}
+
+function getActiveSceneAtTime(t) {
+  if (!sceneData.length) return { scene: null, index: -1, localTime: 0 };
+  let clampedT = Math.max(0, Math.min(t, totalDuration - 0.05));
+  for (let i = 0; i < sceneData.length; i++) {
+    const s = sceneData[i];
+    if (clampedT >= s.start_time && clampedT < s.end_time) {
+      return { scene: s, index: i, localTime: clampedT - s.start_time };
+    }
+  }
+  const lastIdx = sceneData.length - 1;
+  return { scene: sceneData[lastIdx], index: lastIdx, localTime: sceneData[lastIdx].duration_seconds };
+}
+
+function renderCanvasFrame() {
+  if (!previewCanvasCtx || !sceneData.length) return;
+  const isLandscape = aspectSelect ? aspectSelect.value === '16:9' : false;
+  
+  previewCanvas.width = isLandscape ? 1920 : 1080;
+  previewCanvas.height = isLandscape ? 1080 : 1920;
+
+  const { scene, index, localTime } = getActiveSceneAtTime(currentTime);
+  if (!scene) {
+    previewCanvas.classList.add('hidden');
+    previewEmpty.classList.remove('hidden');
+    previewOverlay.classList.add('hidden');
+    return;
+  }
+
+  previewCanvas.classList.remove('hidden');
+  previewEmpty.classList.add('hidden');
+  previewOverlay.classList.remove('hidden');
+
+  activeScene = index;
+  previewSceneNum.textContent = `Scene ${index + 1}`;
+  previewFxBadge.textContent = getEffectLabel(scene.effect);
+  const resolvedAtmosphere = resolveAtmosphereEffect(scene.atmosphere_effect || 'auto', scene.text);
+  previewMovementBadge.textContent = `${getMovementLabel(scene.movement)}${scene.camera_effect !== 'handheld' && scene.camera_effect !== 'none' && (scene.camera_effect === 'impact_shake' || (scene.camera_effect === 'auto' && getImpactShakeStartFraction(scene.text) !== null)) ? ' · 💥' : ''}${resolvedAtmosphere !== 'none' ? ` · ${resolvedAtmosphere.replace('_', ' ')}` : ''}`;
+  previewText.textContent = scene.text;
+  previewSceneLabel.textContent = `Scene ${index + 1} of ${sceneData.length}`;
+
+  updateLiveSubtitleOverlay(scene.text, localTime, scene.duration_seconds || 4.0);
+
+  const url = getSceneImageUrl(scene, index);
+  let imgObj = url ? loadedImages[url] : null;
+  if (url && (!imgObj || !imgObj.complete)) {
+    if (!imgObj) {
+      imgObj = new Image();
+      imgObj.onload = () => { renderCanvasFrame(); };
+      imgObj.src = url;
+      loadedImages[url] = imgObj;
+    }
+  }
+
+  const ctx = previewCanvasCtx;
+  const cw = previewCanvas.width;
+  const ch = previewCanvas.height;
+
+  ctx.clearRect(0, 0, cw, ch);
+  ctx.save();
+
+  // Apply Visual Filter Grade to Canvas
+  ctx.filter = getCanvasCssFilter(scene.effect);
+
+  if (imgObj && imgObj.complete && imgObj.naturalWidth > 0) {
+    const progress = Math.min(1.0, Math.max(0.0, localTime / (scene.duration_seconds || 4)));
+    
+    // Ken Burns Math
+    let scale = 1.0;
+    let panX = 0;
+    let panY = 0;
+
+    if (scene.movement === 'zoom_in') {
+      scale = 1.0 + (progress * 0.15);
+    } else if (scene.movement === 'zoom_out') {
+      scale = 1.15 - (progress * 0.15);
+    } else if (scene.movement === 'pan_left') {
+      scale = 1.12;
+      panX = (0.5 - progress) * (cw * 0.08);
+    } else if (scene.movement === 'pan_right') {
+      scale = 1.12;
+      panX = (progress - 0.5) * (cw * 0.08);
+    }
+    const impactFraction = getImpactShakeStartFraction(scene.text);
+    const shakeStart = scene.camera_effect === 'impact_shake'
+      ? (impactFraction === null ? 0.25 : impactFraction)
+      : scene.camera_effect === 'none' || scene.camera_effect === 'handheld' ? null : impactFraction;
+    if (shakeStart !== null) {
+      const shakeTime = localTime - shakeStart * (scene.duration_seconds || 4);
+      if (shakeTime >= 0 && shakeTime <= 0.6) {
+        const decay = Math.exp(-shakeTime * 5.5);
+        scale = Math.max(scale, 1.04);
+        panX += Math.sin(shakeTime * 42) * cw * 0.012 * decay;
+        panY += Math.sin(shakeTime * 56) * ch * 0.012 * decay;
+      }
+    }
+
+    // Draw Cover Image with Aspect Ratio Fit
+    const imgRatio = imgObj.naturalWidth / imgObj.naturalHeight;
+    const canvasRatio = cw / ch;
+    let renderW, renderH;
+    if (imgRatio > canvasRatio) {
+      renderH = ch;
+      renderW = ch * imgRatio;
+    } else {
+      renderW = cw;
+      renderH = cw / imgRatio;
+    }
+
+    const drawX = (cw - renderW) / 2 + panX;
+    const drawY = (ch - renderH) / 2 + panY;
+
+    ctx.translate(cw / 2, ch / 2);
+    ctx.scale(scale, scale);
+    ctx.translate(-cw / 2, -ch / 2);
+    ctx.drawImage(imgObj, drawX, drawY, renderW, renderH);
+  } else {
+    // Canvas Placeholder
+    ctx.fillStyle = '#09090b';
+    ctx.fillRect(0, 0, cw, ch);
+    ctx.fillStyle = '#a1a1aa';
+    ctx.font = 'bold 36px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`Scene ${index + 1} Image Placeholder`, cw / 2, ch / 2);
+  }
+
+  ctx.restore();
+
+  drawAtmosphereEffect(
+    ctx,
+    resolveAtmosphereEffect(scene.atmosphere_effect || 'auto', scene.text),
+    cw,
+    ch,
+    localTime,
+    index,
+  );
+
+  // Draw Vignette Gradient Overlay
+  const grad = ctx.createRadialGradient(cw / 2, ch / 2, cw * 0.3, cw / 2, ch / 2, cw * 0.75);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.4)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cw, ch);
+}
+
+function getEffectLabel(eff) {
+  switch (eff) {
+    case 'soft': return '🌅 Soft Warmth';
+    case 'cyberpunk': return '🌃 Cyberpunk';
+    case 'vhs': return '📼 Retro VHS';
+    case 'dark_mood': return '🏰 Dark Mood';
+    case 'vintage': return '📷 Vintage Sepia';
+    default: return '🎬 Cinematic';
+  }
+}
+
+function getImpactShakeStartFraction(text) {
+  const actionPattern = /\b(?:thunder(?:\s+struck)?|lightning\s+struck|struck|explod\w*|detonat\w*|crash(?:ed|es|ing)?|slam(?:med|s|ming)?|impact|collid\w*|shatter\w*|smash(?:ed|es|ing)?|blast(?:ed|s|ing)?|burst|erupt\w*|punched|punches|punching|kicked|kicks|kicking|attacked|attack|attacks|gunshot|shot|fired|fires|earthquake|suddenly\s+(?:fell|hit|struck|crashed|exploded|slammed))\b/i;
+  const match = actionPattern.exec(String(text || ''));
+  if (!match) return null;
+  const totalWords = Math.max(1, String(text).trim().split(/\s+/).length);
+  const wordsBeforeImpact = String(text).slice(0, match.index).trim().split(/\s+/).filter(Boolean).length;
+  return Math.min(1, wordsBeforeImpact / totalWords);
+}
+
+function resolveAtmosphereEffect(effect, text) {
+  if (effect && effect !== 'auto') return effect;
+  const cues = [
+    ['lightning', /\b(?:lightning|thunder(?:storm)?|bolt of lightning)\b/i],
+    ['rain', /\b(?:rain|raining|rainstorm|downpour|pouring rain|wet streets?|storm|monsoon)\b/i],
+    ['snow', /\b(?:snow|snowing|snowfall|blizzard|snowflakes?)\b/i],
+    ['fog', /\b(?:fog|foggy|mist|misty|haze|hazy)\b/i],
+    ['dust', /\b(?:dust|dusty|desert|sandstorm|sandy|dry earth)\b/i],
+    ['sun_rays', /\b(?:sunlight|sunbeam|sunbeams|sun rays|sunrays|sunrise|sunset|sunlit)\b/i],
+    ['embers', /\b(?:embers?|sparks?|fire|flames?|burning|blazing)\b/i],
+    ['smoke', /\b(?:smoke|smoking|smoky|smoke plume)\b/i],
+    ['candle_flicker', /\b(?:candle|candles|candlelight|torchlight|torch-lit)\b/i],
+  ];
+  const match = cues.find(([, pattern]) => pattern.test(String(text || '')));
+  return match ? match[0] : 'none';
+}
+
+function drawAtmosphereEffect(ctx, effect, width, height, time, seed) {
+  if (!effect || effect === 'none') return;
+  const drawParticles = (count, color, size, speedX, speedY, rising = false, streak = false) => {
+    ctx.fillStyle = color;
+    for (let i = 0; i < count; i++) {
+      const xBase = (i * 173 + seed * 47) % width;
+      const yBase = (i * 251 + seed * 83) % height;
+      const x = ((xBase + time * speedX + width) % width);
+      const y = ((yBase + (rising ? -1 : 1) * time * speedY + height) % height);
+      ctx.fillRect(x, y, streak ? size * 0.35 : size, streak ? size * 5 : size);
+    }
+  };
+
+  if (effect === 'dust') {
+    drawParticles(22, 'rgba(220,198,154,0.32)', 4, 7, 5, true);
+  } else if (effect === 'embers') {
+    drawParticles(16, 'rgba(255,112,42,0.78)', 4, 3, 23, true);
+    drawParticles(8, 'rgba(255,190,76,0.55)', 3, -4, 16, true);
+  } else if (effect === 'snow') {
+    drawParticles(26, 'rgba(245,250,255,0.72)', 5, 2, 14);
+  } else if (effect === 'rain') {
+    drawParticles(38, 'rgba(190,220,245,0.38)', 3, -28, 190, false, true);
+  } else if (effect === 'fog') {
+    for (let i = 0; i < 5; i++) {
+      const x = ((time * (12 + i * 3) + i * width / 4) % (width * 1.5)) - width / 3;
+      const y = height * (0.2 + i * 0.14);
+      const gradient = ctx.createLinearGradient(x, y, x + width * 0.55, y);
+      gradient.addColorStop(0, 'rgba(205,220,230,0)');
+      gradient.addColorStop(0.5, 'rgba(205,220,230,0.13)');
+      gradient.addColorStop(1, 'rgba(205,220,230,0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x, y - height * 0.06, width * 0.55, height * 0.12);
+    }
+  } else if (effect === 'smoke') {
+    for (let i = 0; i < 7; i++) {
+      const x = ((i * width / 7 + time * (8 + i * 2)) % width);
+      const y = ((height - i * 42 - time * (8 + i)) % height + height) % height;
+      const gradient = ctx.createRadialGradient(x, y, 2, x, y, width * 0.1);
+      gradient.addColorStop(0, 'rgba(175,180,185,0.16)');
+      gradient.addColorStop(1, 'rgba(175,180,185,0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x - width * 0.1, y - width * 0.1, width * 0.2, width * 0.2);
+    }
+  } else if (effect === 'sun_rays') {
+    const rayGradient = ctx.createLinearGradient(0, 0, width * 0.65, height * 0.8);
+    rayGradient.addColorStop(0, 'rgba(255,224,150,0.2)');
+    rayGradient.addColorStop(1, 'rgba(255,224,150,0)');
+    ctx.fillStyle = rayGradient;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(width * 0.58, 0);
+    ctx.lineTo(width * 0.18, height);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(width * 0.1, 0);
+    ctx.lineTo(width * 0.28, 0);
+    ctx.lineTo(width * 0.76, height);
+    ctx.lineTo(width * 0.55, height);
+    ctx.closePath();
+    ctx.fill();
+  } else if (effect === 'lightning' || effect === 'flash') {
+    if ((time % 3) < (effect === 'lightning' ? 0.19 : 0.08)) {
+      ctx.fillStyle = effect === 'lightning' ? 'rgba(230,240,255,0.32)' : 'rgba(255,255,255,0.24)';
+      ctx.fillRect(0, 0, width, height);
+    }
+  } else if (effect === 'candle_flicker') {
+    ctx.fillStyle = `rgba(255,165,64,${0.025 + (Math.sin(time * 17) + 1) * 0.012})`;
+    ctx.fillRect(0, 0, width, height);
+  } else if (effect === 'glow') {
+    const gradient = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, width * 0.75);
+    gradient.addColorStop(0, 'rgba(255,235,190,0.10)');
+    gradient.addColorStop(1, 'rgba(255,235,190,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+  } else if (effect === 'vignette') {
+    const gradient = ctx.createRadialGradient(width / 2, height / 2, width * 0.25, width / 2, height / 2, width * 0.78);
+    gradient.addColorStop(0, 'rgba(0,0,0,0)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0.46)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, width, height);
+  }
+}
+
+function getMovementLabel(mov) {
+  switch (mov) {
+    case 'zoom_out': return '⬇ Zoom Out';
+    case 'pan_left': return '⬅ Pan Left';
+    case 'pan_right': return '➔ Pan Right';
+    case 'static': return '⏸ Static';
+    default: return '⬆ Zoom In';
+  }
+}
+
+function getCanvasCssFilter(eff) {
+  switch (eff) {
+    case 'soft': return 'brightness(1.04) saturate(0.92)';
+    case 'cyberpunk': return 'contrast(1.15) saturate(1.4) hue-rotate(15deg)';
+    case 'vhs': return 'contrast(1.1) saturate(1.3) sepia(0.12)';
+    case 'dark_mood': return 'contrast(1.25) brightness(0.9) saturate(0.8)';
+    case 'vintage': return 'contrast(1.05) saturate(0.85) sepia(0.25)';
+    default: return 'contrast(1.08) saturate(1.15)';
+  }
+}
+
+let currentOverlayChunkText = '';
+
+function updateLiveSubtitleOverlay(text, localTime = 0, duration = 4.0) {
+  const chkShow = document.getElementById('chkShowCaptions');
+  if (chkShow && !chkShow.checked) {
+    if (previewSubtitleOverlay) previewSubtitleOverlay.classList.add('hidden');
+    return;
+  }
+  if (!text) {
+    if (previewSubtitleOverlay) previewSubtitleOverlay.classList.add('hidden');
+    return;
+  }
+
+  const words = text.trim().split(/\s+/);
+  if (!words.length) return;
+
+  // Weight words by length and punctuation pauses for natural voice timing
+  const wordWeights = words.map(w => {
+    let wt = Math.max(1, w.length);
+    if (/[,\;:–-]/.test(w)) wt += 4;
+    else if (/[.\?!]/.test(w)) wt += 7;
+    return wt;
+  });
+  const totalWeight = wordWeights.reduce((a, b) => a + b, 0) || 1;
+
+  // Chunk into 2-3 word phrases with calculated start and end times
+  const chunkSize = 3;
+  const chunks = [];
+  let currTime = 0;
+  for (let i = 0; i < words.length; i += chunkSize) {
+    const chunkWords = words.slice(i, i + chunkSize);
+    const chunkWts = wordWeights.slice(i, i + chunkSize);
+    const chunkDur = (chunkWts.reduce((a, b) => a + b, 0) / totalWeight) * (duration || 4.0);
+    chunks.push({
+      text: chunkWords.join(' '),
+      start: currTime,
+      end: currTime + chunkDur
+    });
+    currTime += chunkDur;
+  }
+
+  let activeText = chunks[0] ? chunks[0].text : text;
+  for (let i = 0; i < chunks.length; i++) {
+    if (localTime >= chunks[i].start && localTime <= chunks[i].end) {
+      activeText = chunks[i].text;
+      break;
+    }
+  }
+
+  const styleSel = document.getElementById('captionStyleSelect');
+  const posSel = document.getElementById('captionPosSelect');
+
+  const style = styleSel ? styleSel.value : 'BEAST_YELLOW';
+  const pos = posSel ? posSel.value : 'BOTTOM';
+
+  if (previewSubtitleText && previewSubtitleOverlay) {
+    previewSubtitleOverlay.classList.remove('hidden');
+
+    if (currentOverlayChunkText !== activeText) {
+      currentOverlayChunkText = activeText;
+      previewSubtitleText.textContent = activeText;
+      // Trigger pop animation effect
+      previewSubtitleText.style.animation = 'none';
+      void previewSubtitleText.offsetWidth; // Force reflow
+      previewSubtitleText.style.animation = 'captionPopKeyframe 0.16s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards';
+    }
+    
+    // Position
+    if (pos === 'TOP') {
+      previewSubtitleOverlay.style.top = '10%';
+      previewSubtitleOverlay.style.bottom = 'auto';
+    } else if (pos === 'CENTER') {
+      previewSubtitleOverlay.style.top = '44%';
+      previewSubtitleOverlay.style.bottom = 'auto';
+    } else {
+      previewSubtitleOverlay.style.bottom = '1.25rem';
+      previewSubtitleOverlay.style.top = 'auto';
+    }
+
+    // Dynamic Styling
+    let baseClass = "inline-block px-4 py-2 rounded-2xl shadow-2xl transition-transform duration-75 ease-out ";
+    if (style === 'NEON_CYAN') {
+      previewSubtitleText.className = baseClass + "bg-black/90 text-cyan-300 font-extrabold text-sm sm:text-base border-2 border-cyan-400 tracking-wide shadow-cyan-500/30";
+    } else if (style === 'FIRE_PUNCH') {
+      previewSubtitleText.className = baseClass + "bg-gradient-to-r from-orange-600 via-red-600 to-amber-600 text-white font-black text-sm sm:text-base border-2 border-white uppercase tracking-wider shadow-red-600/40";
+    } else if (style === 'CLEAN_WHITE') {
+      previewSubtitleText.className = baseClass + "bg-black/90 text-white font-extrabold text-sm sm:text-base border-2 border-white/40";
+    } else if (style === 'CINEMATIC') {
+      previewSubtitleText.className = baseClass + "bg-black/70 backdrop-blur-md text-zinc-100 font-serif italic text-sm sm:text-base border border-white/20";
+    } else if (style === 'BOXED_DARK') {
+      previewSubtitleText.className = baseClass + "bg-black text-zinc-100 font-extrabold text-sm sm:text-base border border-zinc-700";
+    } else { // BEAST_YELLOW (default)
+      previewSubtitleText.className = baseClass + "bg-black/90 text-yellow-300 font-black text-sm sm:text-base border-2 border-yellow-500 tracking-tight shadow-yellow-500/25";
+    }
+  }
+}
+
+// Wire up caption control change events
+['chkShowCaptions', 'captionStyleSelect', 'captionPosSelect', 'captionFontSizeSelect'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('change', () => {
+      currentOverlayChunkText = '';
+      renderCanvasFrame();
+    });
+  }
+});
+
+/* Narration Style Presets Engine */
+const NARRATION_PRESETS = {
+  mrbeast: {
+    voice: 'en-US-ChristopherNeural',
+    caption_style: 'BEAST_YELLOW',
+    caption_position: 'BOTTOM',
+    caption_font_size: '64',
+    movement: 'zoom_in',
+    effect: 'cinematic',
+    promptStyle: 'cinematic'
+  },
+  cyberpunk: {
+    voice: 'en-US-GuyNeural',
+    caption_style: 'NEON_CYAN',
+    caption_position: 'CENTER',
+    caption_font_size: '48',
+    movement: 'pan_right',
+    effect: 'cyberpunk',
+    promptStyle: 'cyberpunk'
+  },
+  dark_crime: {
+    voice: 'en-US-EricNeural',
+    caption_style: 'BOXED_DARK',
+    caption_position: 'BOTTOM',
+    caption_font_size: '48',
+    movement: 'zoom_out',
+    effect: 'dark_mood',
+    promptStyle: 'dark_fantasy'
+  },
+  cinematic_doc: {
+    voice: 'en-GB-SoniaNeural',
+    caption_style: 'CINEMATIC',
+    caption_position: 'BOTTOM',
+    caption_font_size: '36',
+    movement: 'pan_left',
+    effect: 'soft',
+    promptStyle: 'photorealistic'
+  },
+  fire_action: {
+    voice: 'en-US-GuyNeural',
+    caption_style: 'FIRE_PUNCH',
+    caption_position: 'CENTER',
+    caption_font_size: '64',
+    movement: 'zoom_in',
+    effect: 'cinematic',
+    promptStyle: 'cinematic'
+  },
+  classic_white: {
+    voice: 'en-US-JennyNeural',
+    caption_style: 'CLEAN_WHITE',
+    caption_position: 'BOTTOM',
+    caption_font_size: '48',
+    movement: 'static',
+    effect: 'vintage',
+    promptStyle: 'surreal'
+  }
+};
+
+function applyNarrationPreset(presetKey) {
+  const p = NARRATION_PRESETS[presetKey];
+  if (!p) return;
+
+  const voiceSel = document.getElementById('voiceSelect');
+  const styleSel = document.getElementById('captionStyleSelect');
+  const posSel = document.getElementById('captionPosSelect');
+  const sizeSel = document.getElementById('captionFontSizeSelect');
+  const promptStyleSel = document.getElementById('promptStyleSelect');
+
+  if (voiceSel && p.voice) voiceSel.value = p.voice;
+  if (styleSel && p.caption_style) styleSel.value = p.caption_style;
+  if (posSel && p.caption_position) posSel.value = p.caption_position;
+  if (sizeSel && p.caption_font_size) sizeSel.value = p.caption_font_size;
+  if (promptStyleSel && p.promptStyle) promptStyleSel.value = p.promptStyle;
+
+  if (typeof sceneData !== 'undefined' && Array.isArray(sceneData)) {
+    sceneData.forEach(scene => {
+      if (p.movement) scene.movement = p.movement;
+      if (p.effect) scene.effect = p.effect;
+    });
+  }
+
+  document.querySelectorAll('.narration-preset-btn').forEach(btn => {
+    if (btn.dataset.preset === presetKey) {
+      btn.classList.add('border-amber-500/60', 'bg-amber-500/10', 'active-preset');
+      btn.classList.remove('border-zinc-800', 'bg-zinc-950');
+    } else {
+      btn.classList.remove('border-amber-500/60', 'bg-amber-500/10', 'active-preset');
+      btn.classList.add('border-zinc-800', 'bg-zinc-950');
+    }
+  });
+
+  currentOverlayChunkText = '';
+  renderCanvasFrame();
+  if (typeof renderSceneList === 'function') renderSceneList();
+}
+
+document.querySelectorAll('.narration-preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    applyNarrationPreset(btn.dataset.preset);
+  });
+});
+
+/* ============================================================
+   PLAYBACK ENGINE & AUDIO SYNC
+============================================================ */
+let lastPlaybackTimestamp = 0;
+
+function togglePlayPause() {
+  if (isPlaying) pausePlayback();
+  else startPlayback();
+}
+
+function startPlayback() {
+  if (!sceneData.length) return;
+  if (currentTime >= totalDuration) currentTime = 0;
+  isPlaying = true;
+  lastPlaybackTimestamp = performance.now();
+  if (playIcon) playIcon.setAttribute('data-lucide', 'pause');
+  if (window.lucide) window.lucide.createIcons();
+  runAnimationLoop();
+  syncAudioPlayback();
+}
+
+function pausePlayback() {
+  isPlaying = false;
+  if (animFrameId) cancelAnimationFrame(animFrameId);
+  if (currentAudio) { currentAudio.pause(); }
+  if (playIcon) playIcon.setAttribute('data-lucide', 'play');
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function seekToTime(targetT) {
+  currentTime = Math.max(0, Math.min(targetT, totalDuration));
+  updateTimecodeUI();
+  updatePlayheadPositionUI();
+  renderCanvasFrame();
+  if (isPlaying) syncAudioPlayback();
+}
+
+function syncAudioPlayback() {
+  const { scene, localTime } = getActiveSceneAtTime(currentTime);
+  if (!scene || !scene.audio_url) {
+    if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+    return;
+  }
+
+  // Pre-cache Audio objects for ALL scenes so transitions are instant
+  sceneData.forEach(s => {
+    if (s.audio_url && !sceneAudioMap[s.audio_url]) {
+      const a = new Audio(s.audio_url);
+      a.preload = 'auto';
+      sceneAudioMap[s.audio_url] = a;
+    }
+  });
+
+  const targetAudio = sceneAudioMap[scene.audio_url];
+  if (!targetAudio) return;
+
+  if (currentAudio && currentAudio !== targetAudio) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+  }
+
+  currentAudio = targetAudio;
+
+  if (isPlaying) {
+    // Sync position if drifted more than 0.4s
+    if (Math.abs(currentAudio.currentTime - localTime) > 0.4) {
+      currentAudio.currentTime = Math.max(0, localTime);
+    }
+    currentAudio.play().catch(() => {});
+  }
+}
+
+function runAnimationLoop() {
+  if (!isPlaying) return;
+  const now = performance.now();
+  const dt = (now - lastPlaybackTimestamp) / 1000;
+  lastPlaybackTimestamp = now;
+
+  currentTime += dt;
+
+  if (currentTime >= totalDuration) {
+    currentTime = totalDuration;
+    pausePlayback();
+    updateTimecodeUI();
+    updatePlayheadPositionUI();
+    renderCanvasFrame();
+    return;
+  }
+
+  updateTimecodeUI();
+  updatePlayheadPositionUI();
+  renderCanvasFrame();
+
+  // Scene-boundary detection: re-sync audio when crossing into a new scene
+  const { scene } = getActiveSceneAtTime(currentTime);
+  if (scene && currentAudio) {
+    const targetAudio = scene.audio_url ? sceneAudioMap[scene.audio_url] : null;
+    if (targetAudio && targetAudio !== currentAudio) {
+      syncAudioPlayback(); // triggers scene switch
+    } else if (currentAudio.paused && isPlaying) {
+      syncAudioPlayback(); // re-trigger if paused mid-scene
+    }
+  }
+
+  animFrameId = requestAnimationFrame(runAnimationLoop);
+}
+
+/* ============================================================
+   RENDER HORIZONTAL MULTI-TRACK NLE TIMELINE
+============================================================ */
+function renderTimeline() {
+  calculateTimeline();
+  preloadSceneImages();
+
+  // Clear track children (preserve empty placeholder if no scenes)
+  document.querySelectorAll('.timeline-clip-card, .timeline-sub-block, .timeline-audio-block, .ruler-mark').forEach(el => el.remove());
+
+  if (!sceneData.length) {
+    timelineEmpty.style.display = 'block';
+    timelineBadge.textContent = '— scenes populate automatically';
+    if (timelinePlayhead) timelinePlayhead.style.display = 'none';
+    renderCanvasFrame();
+    return;
+  }
+
+  timelineEmpty.style.display = 'none';
+  timelineBadge.textContent = `${sceneData.length} scene${sceneData.length > 1 ? 's' : ''} • ${totalDuration.toFixed(1)}s total`;
+  if (timelinePlayhead) timelinePlayhead.style.display = 'flex';
+
+  const ppx = PPX; // pixels-per-second — defined globally so resize math agrees
+
+  // 1. Render Timeline Ruler Marks
+  timelineRuler.style.width = `${Math.max(100, totalDuration * ppx)}px`;
+  const stepSec = totalDuration > 40 ? 5 : 2;
+  for (let sec = 0; sec <= totalDuration + stepSec; sec += stepSec) {
+    const mark = document.createElement('div');
+    mark.className = 'ruler-mark absolute top-0 bottom-0 flex flex-col justify-between border-l border-zinc-800 pl-1 pointer-events-none';
+    mark.style.left = `${sec * ppx}px`;
+    mark.innerHTML = `<span class="text-[9px] text-zinc-500 font-mono">${sec}s</span>`;
+    timelineRuler.appendChild(mark);
+  }
+
+  // Ruler Scrubbing Event
+  timelineRuler.onclick = (e) => {
+    const rect = timelineRuler.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const targetSec = clickX / ppx;
+    seekToTime(targetSec);
+  };
+
+  // 2. Render Track 1: Scene Image Clips
+  sceneTrack.style.width = `${Math.max(100, totalDuration * ppx)}px`;
+  subtitleTrack.style.width = `${Math.max(100, totalDuration * ppx)}px`;
+  audioTrack.style.width = `${Math.max(100, totalDuration * ppx)}px`;
+
+  sceneData.forEach((scene, index) => {
+    const clipW = Math.max(110, scene.duration_seconds * ppx);
+
+    // Clip Card
+    const card = document.createElement('div');
+    card.className = `timeline-clip-card relative shrink-0 rounded-xl overflow-hidden border border-zinc-700 bg-zinc-950 cursor-pointer hover:border-violet-400 transition-all select-none group shadow-md ${index === activeScene ? 'ring-2 ring-violet-500 border-violet-500' : ''}`;
+    card.style.width = `${clipW}px`;
+    card.style.height = '96px';
+    card.draggable = true;
+    card.dataset.index = index;
+
+    // Thumbnail Image
+    const url = getSceneImageUrl(scene, index);
+    const thumbImg = document.createElement('img');
+    thumbImg.className = 'w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-300';
+    thumbImg.src = url || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100%" height="100%" fill="%2318181b"/></svg>';
+    card.appendChild(thumbImg);
+
+    // Overlay Header (Scene Number & Duration) — updated live during resize
+    const headerPill = document.createElement('div');
+    headerPill.className = 'absolute top-1.5 inset-x-1.5 flex items-center justify-between pointer-events-none';
+    const durBadge = document.createElement('span');
+    durBadge.className = 'text-[9px] font-mono font-semibold px-1.5 py-0.5 rounded-md bg-black/70 backdrop-blur-sm text-zinc-300 clip-dur-badge';
+    durBadge.textContent = `${scene.duration_seconds.toFixed(1)}s`;
+    headerPill.innerHTML = `<span class="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-black/70 backdrop-blur-sm text-violet-300">S${index + 1}</span>`;
+    headerPill.appendChild(durBadge);
+    card.appendChild(headerPill);
+
+    // Overlay Footer (Movement, Shift Image buttons & Edit button)
+    const footerBar = document.createElement('div');
+    footerBar.className = 'absolute bottom-1.5 inset-x-1.5 flex items-center justify-between gap-1';
+    footerBar.innerHTML = `
+      <span class="text-[8px] font-semibold px-1.5 py-0.5 rounded-md bg-violet-500/80 backdrop-blur-sm text-white truncate max-w-[55px]">${getMovementLabel(scene.movement)}</span>
+      <div class="flex items-center gap-0.5">
+        <button type="button" class="btn-shift-img-left text-[9px] px-1 py-0.5 rounded bg-black/70 hover:bg-violet-600 text-zinc-200" title="Move image left to prev scene" ${index === 0 ? 'disabled style="opacity:0.3"' : ''}>◄</button>
+        <button type="button" class="btn-shift-img-right text-[9px] px-1 py-0.5 rounded bg-black/70 hover:bg-violet-600 text-zinc-200" title="Move image right to next scene" ${index === sceneData.length - 1 ? 'disabled style="opacity:0.3"' : ''}>►</button>
+        <button type="button" class="btn-edit-scene text-[9px] px-1.5 py-0.5 rounded-md bg-zinc-800 hover:bg-zinc-700 text-white shadow-sm flex items-center" title="Edit scene parameters">Edit</button>
+      </div>
+    `;
+    card.appendChild(footerBar);
+
+    // ── LEFT TRIM HANDLE ─────────────────────────────────────
+    const leftHandle = document.createElement('div');
+    leftHandle.className = 'trim-handle trim-handle-left absolute top-0 bottom-0 left-0 w-2 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity';
+    leftHandle.style.cursor = 'ew-resize';
+    leftHandle.style.background = 'linear-gradient(to right, rgba(139,92,246,0.7), transparent)';
+    leftHandle.innerHTML = `<span style="color:#a78bfa;font-size:8px;letter-spacing:-1px;pointer-events:none;">||</span>`;
+    card.appendChild(leftHandle);
+
+    // ── RIGHT TRIM HANDLE ────────────────────────────────────
+    const rightHandle = document.createElement('div');
+    rightHandle.className = 'trim-handle trim-handle-right absolute top-0 bottom-0 right-0 w-2 z-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity';
+    rightHandle.style.cursor = 'ew-resize';
+    rightHandle.style.background = 'linear-gradient(to left, rgba(139,92,246,0.7), transparent)';
+    rightHandle.innerHTML = `<span style="color:#a78bfa;font-size:8px;letter-spacing:-1px;pointer-events:none;">||</span>`;
+    card.appendChild(rightHandle);
+
+    // ── TRIM HANDLE MOUSE EVENTS ─────────────────────────────
+
+    const startTrim = (e, edge) => {
+      e.preventDefault();
+      e.stopPropagation();
+      card.draggable = false; // prevent drag-drop during resize
+      resizeState = {
+        index,
+        edge,
+        startX: e.clientX,
+        startDuration: scene.duration_seconds,
+        prevDuration: index > 0 ? sceneData[index - 1].duration_seconds : null,
+      };
+      document.body.style.cursor = 'ew-resize';
+      document.body.style.userSelect = 'none';
+    };
+
+    leftHandle.addEventListener('mousedown', e => startTrim(e, 'left'));
+    rightHandle.addEventListener('mousedown', e => startTrim(e, 'right'));
+
+    // Helper: Swap only image/visual properties between two scenes
+    const swapImageProperties = (idxA, idxB) => {
+      const imgFields = ['image_url', 'custom_image_url', 'custom_image_file', 'image_index', 'image_prompt', 'movement', 'camera_effect', 'atmosphere_effect', 'effect'];
+      const tmp = {};
+      imgFields.forEach(f => { tmp[f] = sceneData[idxA][f]; });
+      imgFields.forEach(f => { sceneData[idxA][f] = sceneData[idxB][f]; });
+      imgFields.forEach(f => { sceneData[idxB][f] = tmp[f]; });
+      renderTimeline();
+    };
+
+    // Drag and Drop Events — only swaps the IMAGE scene visual parameters, not narration text/audio
+    card.addEventListener('dragstart', e => {
+      dragFrom = index;
+      card.style.opacity = '0.4';
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(index));
+    });
+    card.addEventListener('dragend', () => {
+      card.style.opacity = '1';
+      dragFrom = null;
+    });
+    card.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      card.classList.add('border-violet-400');
+    });
+    card.addEventListener('dragleave', () => card.classList.remove('border-violet-400'));
+    card.addEventListener('drop', e => {
+      e.preventDefault();
+      card.classList.remove('border-violet-400');
+      if (dragFrom === null || dragFrom === index) return;
+      swapImageProperties(dragFrom, index);
+    });
+
+    // Image Shift Buttons (◄ / ►)
+    footerBar.querySelector('.btn-shift-img-left').addEventListener('click', e => {
+      e.stopPropagation();
+      if (index > 0) swapImageProperties(index, index - 1);
+    });
+    footerBar.querySelector('.btn-shift-img-right').addEventListener('click', e => {
+      e.stopPropagation();
+      if (index < sceneData.length - 1) swapImageProperties(index, index + 1);
+    });
+
+    // Click to select & preview scene
+    card.addEventListener('click', e => {
+      if (!e.target.closest('button')) {
+        seekToTime(scene.start_time);
+      }
+    });
+
+    footerBar.querySelector('.btn-edit-scene').addEventListener('click', e => {
+      e.stopPropagation();
+      openModal(index);
+    });
+
+    sceneTrack.appendChild(card);
+
+    // 3. Render Track 2: Subtitles / Scene Order Block
+    const subBlock = document.createElement('div');
+    subBlock.className = 'timeline-sub-block shrink-0 rounded-lg bg-zinc-900 border border-zinc-800 px-1.5 py-1 flex items-center gap-1 text-[10px] text-zinc-300 select-none shadow-sm';
+    subBlock.style.width = `${clipW}px`;
+    subBlock.style.height = '26px';
+    subBlock.title = scene.text;
+    subBlock.innerHTML = `
+      <span class="truncate font-sans flex-1 min-w-0">${scene.text}</span>
+      <div class="flex items-center gap-0.5 shrink-0">
+        <button type="button" class="btn-move-up text-[10px] px-1 py-0.5 rounded bg-zinc-800 hover:bg-violet-700 text-zinc-300 leading-none" title="Move scene up" ${index === 0 ? 'disabled style="opacity:0.3"' : ''}>▲</button>
+        <button type="button" class="btn-move-down text-[10px] px-1 py-0.5 rounded bg-zinc-800 hover:bg-violet-700 text-zinc-300 leading-none" title="Move scene down" ${index === sceneData.length - 1 ? 'disabled style="opacity:0.3"' : ''}>▼</button>
+      </div>
+    `;
+    subBlock.querySelector('.btn-move-up').addEventListener('click', e => {
+      e.stopPropagation();
+      if (index === 0) return;
+      [sceneData[index - 1], sceneData[index]] = [sceneData[index], sceneData[index - 1]];
+      renderTimeline();
+      seekToTime(sceneData[index - 1].start_time);
+    });
+    subBlock.querySelector('.btn-move-down').addEventListener('click', e => {
+      e.stopPropagation();
+      if (index === sceneData.length - 1) return;
+      [sceneData[index + 1], sceneData[index]] = [sceneData[index], sceneData[index + 1]];
+      renderTimeline();
+      seekToTime(sceneData[index + 1].start_time);
+    });
+    subtitleTrack.appendChild(subBlock);
+
+    // 4. Render Track 3: Voice Audio Block
+    // ── AUDIO TRACK BLOCK ─────────────────────────────────────────────────────
+    const audioBlock = document.createElement('div');
+    const hasAudio = Boolean(scene.audio_url);
+    const audioDur  = scene.audio_duration || null;
+    const clipDur   = scene.duration_seconds;
+    const isTooShort = hasAudio && audioDur && clipDur < audioDur - 0.05; // clip ends before audio
+    const hasDeadAir = hasAudio && audioDur && clipDur > audioDur + 0.5;  // more than 0.5s dead air
+
+    audioBlock.className = [
+      'timeline-audio-block shrink-0 rounded-lg border relative overflow-hidden select-none shadow-sm',
+      isTooShort ? 'bg-red-950/50 border-red-500/50'
+        : hasAudio ? 'bg-emerald-950/40 border-emerald-500/30'
+        : 'bg-amber-950/30 border-amber-500/30',
+    ].join(' ');
+    audioBlock.style.width  = `${clipW}px`;
+    audioBlock.style.height = '44px';
+
+    // Waveform SVG canvas (will be replaced once computed)
+    const waveContainer = document.createElement('div');
+    waveContainer.className = 'absolute inset-0 pointer-events-none';
+    audioBlock.appendChild(waveContainer);
+
+    // Foreground content row
+    const fgRow = document.createElement('div');
+    fgRow.className = 'relative z-10 h-full flex items-center justify-between px-2 gap-1';
+
+    // Left info
+    const leftInfo = document.createElement('div');
+    leftInfo.className = 'flex items-center gap-1 min-w-0';
+    if (isTooShort) {
+      leftInfo.innerHTML = `
+        <span class="text-red-400 shrink-0" title="Clip is shorter than audio — voice will be cut off!">⚠️</span>
+        <span class="font-mono font-bold text-[9px] text-red-300 truncate">
+          Clip ${clipDur.toFixed(1)}s &lt; Audio ${audioDur.toFixed(1)}s
+        </span>`;
+    } else {
+      const color = hasAudio ? 'text-emerald-300' : 'text-amber-300';
+      leftInfo.innerHTML = `
+        <span class="font-mono font-semibold text-[9px] truncate ${color}">
+          ${hasAudio ? (audioDur ? `${audioDur.toFixed(1)}s` : 'Synced') : 'Pending TTS'}
+        </span>`;
+    }
+    fgRow.appendChild(leftInfo);
+
+    // Right buttons
+    const rightBtns = document.createElement('div');
+    rightBtns.className = 'flex items-center gap-1 shrink-0';
+
+    if (hasAudio) {
+      // Auto-fit button (shown when dead air or too short)
+      if ((isTooShort || hasDeadAir) && audioDur) {
+        const fitBtn = document.createElement('button');
+        fitBtn.type = 'button';
+        fitBtn.title = 'Auto-fit clip to exact audio length';
+        fitBtn.className = 'btn-autofit text-[9px] font-bold px-1.5 py-0.5 rounded ' +
+          (isTooShort ? 'bg-red-500/30 hover:bg-red-500/60 text-red-200'
+                      : 'bg-yellow-500/20 hover:bg-yellow-500/40 text-yellow-200');
+        fitBtn.textContent = '⚡ Fit';
+        fitBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          sceneData[index].duration_seconds = audioDur;
+          renderTimeline();
+        });
+        rightBtns.appendChild(fitBtn);
+      }
+
+      // Audition button
+      const audBtn = document.createElement('button');
+      audBtn.type = 'button';
+      audBtn.className = 'btn-audition-scene text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-200';
+      audBtn.textContent = '▶';
+      audBtn.title = 'Preview this scene\'s audio';
+      audBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (sceneAudioMap[scene.audio_url]) {
+          sceneAudioMap[scene.audio_url].currentTime = 0;
+          sceneAudioMap[scene.audio_url].play();
+        } else {
+          const a = new Audio(scene.audio_url);
+          sceneAudioMap[scene.audio_url] = a;
+          a.play();
+        }
+      });
+      rightBtns.appendChild(audBtn);
+    }
+    fgRow.appendChild(rightBtns);
+    audioBlock.appendChild(fgRow);
+
+    // Dead-air ruler: if clip is longer than audio, show where the active speech ends
+    if (hasDeadAir && audioDur) {
+      const speechEndPct = Math.min(100, (audioDur / clipDur) * 100);
+      const deadAirBar = document.createElement('div');
+      deadAirBar.className = 'absolute bottom-0 right-0 pointer-events-none';
+      deadAirBar.style.cssText = `left:${speechEndPct}%;top:0;bottom:0;background:repeating-linear-gradient(90deg,transparent,transparent 3px,rgba(234,179,8,0.15) 3px,rgba(234,179,8,0.15) 6px);border-left:1px dashed rgba(234,179,8,0.4);`;
+      deadAirBar.title = `Dead air: ${(clipDur - audioDur).toFixed(1)}s of silence at end`;
+      audioBlock.appendChild(deadAirBar);
+    }
+
+    audioTrack.appendChild(audioBlock);
+
+    // Async waveform draw after block is in the DOM
+    if (hasAudio) {
+      drawWaveformInBlock(scene.audio_url, waveContainer, clipW, isTooShort);
+    }
+  });
+
+  if (window.lucide) window.lucide.createIcons();
+  renderCanvasFrame();
+}
+
+function updatePlayheadPositionUI() {
+  if (!timelinePlayhead) return;
+  const ppx = PPX;
+  const playheadX = currentTime * ppx;
+  timelinePlayhead.style.left = `${playheadX}px`;
+
+  // Auto-scroll timeline container if playhead moves offscreen
+  if (isPlaying && timelineScroll) {
+    const scrollLeft = timelineScroll.scrollLeft;
+    const clientW = timelineScroll.clientWidth;
+    if (playheadX > scrollLeft + clientW - 80 || playheadX < scrollLeft) {
+      timelineScroll.scrollLeft = playheadX - 60;
+    }
+  }
+}
+
+/* ============================================================
+   SYNTHESIZE AUDIO ALL (BATCH TTS)
+============================================================ */
+async function synthesizeAllVoiceClips() {
+  if (!sceneData.length) {
+    alert('Please enter or paste a script first.');
+    return;
+  }
+
+  const voice = document.querySelector('[name=voice]').value;
+  btnSynthesizeVoice.disabled = true;
+  btnSynthesizeAudioAll.disabled = true;
+  btnSynthesizeVoice.innerHTML = `<div class="w-3 h-3 border-2 border-violet-300 border-t-transparent rounded-full animate-spin"></div> Synthesizing...`;
+  btnSynthesizeAudioAll.innerHTML = `<div class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Generating TTS Audio...`;
+  if (previewStatusBadge) previewStatusBadge.textContent = 'Synthesizing...';
+
+  try {
+    const resp = await fetch('{% url "narration_synthesize_all_audio" %}', {
+      method: 'POST',
+      body: JSON.stringify({ scenes: sceneData, voice }),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+      }
+    });
+
+    const res = await resp.json();
+    if (!res.success || !res.scenes) {
+      alert(res.error || 'Failed to synthesize narration audio.');
+      return;
+    }
+
+    // Update scene state with exact synthesized WAV audio URLs and precise durations
+    res.scenes.forEach(item => {
+      if (sceneData[item.index]) {
+        const oldUrl = sceneData[item.index].audio_url;
+        if (oldUrl && waveformCache[oldUrl]) delete waveformCache[oldUrl]; // invalidate waveform cache
+        sceneData[item.index].audio_url      = item.audio_url;
+        sceneData[item.index].audio_path     = item.audio_path;
+        sceneData[item.index].duration_seconds = item.duration_seconds; // auto-fit to audio
+        sceneData[item.index].audio_duration   = item.duration_seconds; // ground truth — never overwritten
+      }
+    });
+
+    renderTimeline();
+    seekToTime(0);
+    if (previewStatusBadge) {
+      previewStatusBadge.textContent = 'Audio Synced';
+      previewStatusBadge.className = 'text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30';
+    }
+
+  } catch (err) {
+    alert('An error occurred while synthesizing voice audio.');
+  } finally {
+    btnSynthesizeVoice.disabled = false;
+    btnSynthesizeAudioAll.disabled = false;
+    btnSynthesizeVoice.innerHTML = 'Synthesize Audio';
+    btnSynthesizeAudioAll.innerHTML = 'Synthesize Voice Clips';
+    if (window.lucide) window.lucide.createIcons();
+  }
+}
+
+if (btnSynthesizeVoice) btnSynthesizeVoice.onclick = synthesizeAllVoiceClips;
+if (btnSynthesizeAudioAll) btnSynthesizeAudioAll.onclick = synthesizeAllVoiceClips;
+
+/* ============================================================
+   SINGLE SCENE TTS RE-SYNTHESIS
+============================================================ */
+async function resynthesizeSingleSceneAudio(index) {
+  if (index === null || !sceneData[index]) return;
+  const scene = sceneData[index];
+  const voice = document.querySelector('[name=voice]').value;
+
+  btnModalResynthesize.disabled = true;
+  btnModalResynthesize.innerHTML = `<div class="w-3 h-3 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div> Generating...`;
+
+  try {
+    const resp = await fetch('{% url "narration_synthesize_scene_audio" %}', {
+      method: 'POST',
+      body: JSON.stringify({ index, text: modalText.value.trim(), voice }),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+      }
+    });
+
+    const res = await resp.json();
+    if (!res.success) {
+      alert(res.error || 'Could not re-synthesize scene audio.');
+      return;
+    }
+
+    sceneData[index].text = res.text;
+    sceneData[index].audio_url = res.audio_url;
+    sceneData[index].audio_path = res.audio_path;
+    sceneData[index].duration_seconds = res.duration_seconds;
+
+    renderTimeline();
+    seekToTime(sceneData[index].start_time);
+
+    btnModalResynthesize.innerHTML = 'Voice Updated!';
+    if (window.lucide) window.lucide.createIcons();
+
+  } catch (err) {
+    alert('Failed to re-synthesize scene audio.');
+  } finally {
+    btnModalResynthesize.disabled = false;
+    setTimeout(() => {
+      btnModalResynthesize.innerHTML = 'Re-synthesize Voice';
+      if (window.lucide) window.lucide.createIcons();
+    }, 1800);
+  }
+}
+
+if (btnModalResynthesize) {
+  btnModalResynthesize.onclick = () => resynthesizeSingleSceneAudio(editTarget);
+}
+
+/* ============================================================
+   SCENE EDIT MODAL CONTROLS
+============================================================ */
+function openModal(index) {
+  editTarget = index;
+  const scene = sceneData[index];
+  modalTitle.textContent = `Edit Scene ${index + 1}`;
+  modalSceneNumPill.textContent = index + 1;
+  modalText.value = scene.text;
+  modalImagePrompt.value = scene.image_prompt || '';
+  modalMovement.value = scene.movement || 'zoom_in';
+  modalCameraEffect.value = scene.camera_effect || 'auto';
+  modalAtmosphereEffect.value = scene.atmosphere_effect || 'auto';
+  modalEffect.value = scene.effect || 'cinematic';
+  
+  const url = getSceneImageUrl(scene, index);
+  modalImagePreview.src = url || '';
+  modalImageFileName.textContent = scene.custom_image_file ? scene.custom_image_file.name : (scene.image_name || `Scene ${index + 1} Image`);
+  
+  editModal.classList.remove('hidden');
+  if (window.lucide) window.lucide.createIcons();
+}
+
+document.getElementById('modalClose').onclick = () => editModal.classList.add('hidden');
+document.getElementById('modalCloseBtn').onclick = () => editModal.classList.add('hidden');
+document.getElementById('modalSave').onclick = () => {
+  if (editTarget === null) return;
+  sceneData[editTarget].text         = modalText.value.trim() || sceneData[editTarget].text;
+  sceneData[editTarget].image_prompt = modalImagePrompt.value.trim();
+  sceneData[editTarget].movement     = modalMovement.value;
+  sceneData[editTarget].camera_effect = modalCameraEffect.value;
+  sceneData[editTarget].atmosphere_effect = modalAtmosphereEffect.value;
+  sceneData[editTarget].effect       = modalEffect.value;
+
+  if (modalImageInput.files && modalImageInput.files[0]) {
+    const file = modalImageInput.files[0];
+    sceneData[editTarget].custom_image_file = file;
+    sceneData[editTarget].custom_image_url = URL.createObjectURL(file);
+  }
+
+  editModal.classList.add('hidden');
+  renderTimeline();
+  seekToTime(sceneData[editTarget].start_time);
+};
+
+document.getElementById('modalCopyPrompt').onclick = () => {
+  if (!modalImagePrompt.value.trim()) return;
+  navigator.clipboard.writeText(modalImagePrompt.value.trim());
+  const btn = document.getElementById('modalCopyPrompt');
+  const orig = btn.innerHTML;
+  btn.innerHTML = 'Copied!';
+  setTimeout(() => { btn.innerHTML = orig; }, 1800);
+};
+
+document.getElementById('modalDelete').onclick = () => {
+  if (editTarget === null) return;
+  sceneData.splice(editTarget, 1);
+  editModal.classList.add('hidden');
+  renderTimeline();
+  if (sceneData.length) seekToTime(Math.min(editTarget, sceneData.length - 1));
+};
+
+editModal.onclick = e => { if (e.target === editModal) editModal.classList.add('hidden'); };
+
+/* ============================================================
+   SCRIPT INPUT AUTO-DETECTION & SCENE BUILDER
+============================================================ */
+let detectDebounce = null;
+function autoDetect() {
+  clearTimeout(detectDebounce);
+  detectDebounce = setTimeout(() => {
+    const beats = detectScenes(scriptInput.value);
+    if (!beats.length) {
+      detectBadge.classList.add('hidden');
+      sceneData = [];
+      renderTimeline();
+      return;
+    }
+    const sceneCount = splitScriptIntoScenes(beats).length;
+    detectBadge.textContent = `${sceneCount} short visual scene${sceneCount === 1 ? '' : 's'} detected`;
+    detectBadge.classList.remove('hidden');
+    buildScenes(beats);
+  }, 600);
+}
+
+scriptInput.addEventListener('input', autoDetect);
+scriptInput.addEventListener('paste', () => setTimeout(autoDetect, 50));
+
+function buildScenes(beats) {
+  const imgCount = imageInput.files ? imageInput.files.length : 0;
+  const sceneTexts = splitScriptIntoScenes(beats);
+  sceneData = sceneTexts.map((text, i) => {
+    const words = text.split(/\s+/).length;
+    return {
+      text,
+      image_index: imgCount ? i % imgCount : i,
+      movement: i % 2 === 0 ? 'zoom_in' : 'zoom_out',
+      camera_effect: 'auto',
+      atmosphere_effect: 'auto',
+      effect: 'cinematic',
+      duration_seconds: Math.max(3.0, roundVal(words * 0.38, 1)),
+    };
+  });
+  renderTimeline();
+  seekToTime(0);
+  return sceneData.length;
+}
+
+document.getElementById('btnAutoDetect').onclick = () => {
+  const beats = detectScenes(scriptInput.value);
+  if (!beats.length) { alert('Paste a script first.'); return; }
+  buildScenes(beats);
+};
+
+document.getElementById('btnAddScene').onclick = () => {
+  if (sceneData.length >= MAX_NARRATION_SCENES) {
+    alert(`A POV narration can have no more than ${MAX_NARRATION_SCENES} scenes.`);
+    return;
+  }
+  const imageCount = imageInput.files ? imageInput.files.length : 0;
+  sceneData.push({
+    text: 'New scene narration line…',
+    image_index: imageCount ? sceneData.length % imageCount : sceneData.length,
+    movement: 'zoom_in',
+    camera_effect: 'auto',
+    atmosphere_effect: 'auto',
+    effect: 'cinematic',
+    duration_seconds: 4.0
+  });
+  renderTimeline();
+  openModal(sceneData.length - 1);
+};
+
+document.getElementById('btnClearAll').onclick = () => {
+  if (!sceneData.length || !confirm('Clear all scenes from timeline?')) return;
+  sceneData = [];
+  renderTimeline();
+};
+
+/* --- Fix Scene Order via Gemini AI --- */
+const btnFixSceneOrder = document.getElementById('btnFixSceneOrder');
+if (btnFixSceneOrder) {
+  btnFixSceneOrder.addEventListener('click', async () => {
+    if (sceneData.length < 2) {
+      alert('Need at least 2 scenes to reorder.');
+      return;
+    }
+    btnFixSceneOrder.disabled = true;
+    btnFixSceneOrder.innerHTML = `<div class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Analysing order…`;
+
+    try {
+      const sceneTexts = sceneData.map((s, i) => `Scene ${i + 1}: ${s.text}`).join('\n');
+      const res = await fetch('/studio/narration/reorder-scenes/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCSRF() },
+        body: JSON.stringify({ scene_texts: sceneTexts })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Reorder failed');
+
+      // data.order is a 0-based index array e.g. [2,0,1,3]
+      const order = data.order;
+      if (!Array.isArray(order) || order.length !== sceneData.length) {
+        throw new Error('Unexpected order format from AI');
+      }
+
+      // Preview the proposed order to the user
+      const proposedLabels = order.map((origIdx, newPos) =>
+        `Scene ${newPos + 1} ← was Scene ${origIdx + 1}: ${sceneData[origIdx].text.slice(0, 60)}…`
+      ).join('\n');
+
+      if (!confirm(`Gemini suggests this order:\n\n${proposedLabels}\n\nApply this reorder?`)) {
+        return;
+      }
+
+      // Reorder the sceneData array according to AI suggestion
+      sceneData = order.map(i => sceneData[i]);
+      renderTimeline();
+      seekToTime(0);
+    } catch (err) {
+      alert('AI scene reorder failed: ' + err.message);
+    } finally {
+      btnFixSceneOrder.disabled = false;
+      btnFixSceneOrder.innerHTML = 'Fix Scene Order (AI)';
+    }
+  });
+}
+
+/* ============================================================
+   IMAGE FILE HANDLERS
+============================================================ */
+imageInput.addEventListener('change', () => {
+  if (imageInput.files.length > MAX_NARRATION_SCENES) {
+    const limitedFiles = new DataTransfer();
+    Array.from(imageInput.files).slice(0, MAX_NARRATION_SCENES).forEach(file => limitedFiles.items.add(file));
+    imageInput.files = limitedFiles.files;
+    alert(`Only the first ${MAX_NARRATION_SCENES} images were kept. POV narration is limited to ${MAX_NARRATION_SCENES} image scenes.`);
+  }
+  const n = imageInput.files.length;
+  document.getElementById('imageCount').textContent = n
+    ? `${n} image${n > 1 ? 's' : ''} loaded — matched across ${sceneData.length || 'your'} script scenes.`
+    : 'No images selected.';
+
+  for (let i = 0; i < n; i++) {
+    const file = imageInput.files[i];
+    const url = getFileObjectUrl(file);
+    if (!loadedImages[url]) {
+      const img = new Image();
+      img.onload = () => renderCanvasFrame();
+      img.src = url;
+      loadedImages[url] = img;
+    }
+  }
+
+  if (sceneData.length) {
+    sceneData = sceneData.map((s, i) => ({ ...s, image_index: n ? i % n : i }));
+    renderTimeline();
+    renderCanvasFrame();
+  } else if (scriptInput.value.trim()) {
+    buildScenes(detectScenes(scriptInput.value));
+  }
+});
+
+const imageDropzone = document.getElementById('imageDropzone');
+if (imageDropzone) {
+  imageDropzone.ondragover = e => { e.preventDefault(); imageDropzone.classList.add('border-violet-400'); };
+  imageDropzone.ondragleave = () => imageDropzone.classList.remove('border-violet-400');
+  imageDropzone.ondrop = e => {
+    e.preventDefault(); imageDropzone.classList.remove('border-violet-400');
+    if (e.dataTransfer.files.length) {
+      imageInput.files = e.dataTransfer.files;
+      imageInput.dispatchEvent(new Event('change'));
+    }
+  };
+}
+
+/* ============================================================
+   GEMINI AI SCRIPT STRUCTURING & VOICE AUDITION PREVIEW
+============================================================ */
+const btnAiStructureScript = document.getElementById('btnAiStructureScript');
+const btnAiStructureText   = document.getElementById('btnAiStructureText');
+
+async function aiStructureScriptWithGemini() {
+  const scriptText = scriptInput.value.trim();
+  if (!scriptText) {
+    alert('Please enter or paste your story script first.');
+    return;
+  }
+
+  if (btnAiStructureScript) {
+    btnAiStructureScript.disabled = true;
+    btnAiStructureText.textContent = 'Structuring Scenes...';
+  }
+
+  try {
+    const resp = await fetch('{% url "narration_ai_structure_script" %}', {
+      method: 'POST',
+      body: JSON.stringify({ script: scriptText }),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+      }
+    });
+
+    const res = await resp.json();
+    if (!res.success || !res.data || !res.data.scenes) {
+      alert(res.error || 'Could not structure script with Gemini AI.');
+      return;
+    }
+
+    const aiBeats = res.data.scenes.map(s => s.text);
+    if (aiBeats.length) {
+      const sceneCount = buildScenes(aiBeats);
+      if (detectBadge) {
+        detectBadge.textContent = `${sceneCount} AI visual scenes structured`;
+        detectBadge.classList.remove('hidden');
+      }
+    }
+  } catch (err) {
+    alert('An error occurred while connecting to Gemini AI.');
+  } finally {
+    if (btnAiStructureScript) {
+      btnAiStructureScript.disabled = false;
+      btnAiStructureText.textContent = 'AI Scene Structure (Gemini)';
+    }
+  }
+}
+
+if (btnAiStructureScript) {
+  btnAiStructureScript.onclick = aiStructureScriptWithGemini;
+}
+
+const btnAuditionVoice = document.getElementById('btnAuditionVoice');
+const btnAuditionText  = document.getElementById('btnAuditionText');
+let voiceAuditionAudio = null;
+
+async function auditionSelectedVoice() {
+  const voiceSelect = document.getElementById('voiceSelect');
+  if (!voiceSelect) return;
+  const voice = voiceSelect.value;
+  const scriptText = scriptInput.value.trim();
+  const sampleText = (sceneData.length && sceneData[0].text) ? sceneData[0].text : (scriptText.slice(0, 150) || "Welcome to the POV Narration Studio. This is how I will sound narrating your story.");
+
+  if (btnAuditionVoice) {
+    btnAuditionVoice.disabled = true;
+    btnAuditionText.textContent = 'Auditioning...';
+  }
+
+  try {
+    const resp = await fetch('{% url "narration_preview_voice" %}', {
+      method: 'POST',
+      body: JSON.stringify({ voice, text: sampleText }),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+      }
+    });
+
+    const res = await resp.json();
+    if (!res.success || !res.audio_url) {
+      alert(res.error || 'Could not audition voice sample.');
+      return;
+    }
+
+    if (voiceAuditionAudio) {
+      voiceAuditionAudio.pause();
+    }
+    voiceAuditionAudio = new Audio(res.audio_url);
+    voiceAuditionAudio.play();
+
+  } catch (err) {
+    alert('Voice audition failed.');
+  } finally {
+    if (btnAuditionVoice) {
+      btnAuditionVoice.disabled = false;
+      btnAuditionText.textContent = 'Audition Voice';
+    }
+  }
+}
+
+if (btnAuditionVoice) {
+  btnAuditionVoice.onclick = auditionSelectedVoice;
+}
+
+/* ============================================================
+   ASPECT RATIO & PLAYER CONTROLS
+============================================================ */
+if (aspectSelect) {
+  aspectSelect.onchange = function () {
+    if (previewWrapper) previewWrapper.style.aspectRatio = this.value === '16:9' ? '16/9' : '9/16';
+    renderCanvasFrame();
+  };
+}
+
+if (btnPlayPause) btnPlayPause.onclick = togglePlayPause;
+if (btnStepBack) btnStepBack.onclick = () => seekToTime(currentTime - 2.0);
+if (btnStepForward) btnStepForward.onclick = () => seekToTime(currentTime + 2.0);
+
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space' && document.activeElement.tagName !== 'TEXTAREA' && document.activeElement.tagName !== 'INPUT') {
+    e.preventDefault();
+    togglePlayPause();
+  }
+});
+
+/* ============================================================
+   FORM SUBMIT (FINAL VIDEO RENDER)
+============================================================ */
+document.getElementById('narrationForm').onsubmit = async e => {
+  e.preventDefault();
+  if (!sceneData.length) {
+    alert('Add scenes to the timeline first.');
+    return;
+  }
+  
+  const btn = document.getElementById('renderButton');
+  btn.disabled = true;
+  btn.innerHTML = `<div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Starting Render...`;
+  renderStatus.textContent = 'Uploading timeline setup and starting final video rendering...';
+  
+  document.getElementById('scenesJson').value = JSON.stringify(sceneData);
+
+  const formData = new FormData(e.currentTarget);
+
+  // Append individual scene custom images if user swapped images in modal
+  sceneData.forEach((scene, idx) => {
+    if (scene.custom_image_file) {
+      formData.append(`scene_custom_image_${idx}`, scene.custom_image_file);
+    }
+  });
+
+  try {
+    const resp = await fetch('{% url "narration_render" %}', {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value }
+    });
+    const data = await resp.json();
+    if (data.success) {
+      window.location.href = data.redirect_url;
+    } else {
+      renderStatus.textContent = data.error || 'Could not start the render.';
+      btn.disabled = false;
+      btn.innerHTML = '<span>Render Final Video</span>';
+    }
+  } catch (err) {
+    renderStatus.textContent = 'Failed to submit render job to server.';
+    btn.disabled = false;
+    btn.innerHTML = '<span>Render Final Video</span>';
+  }
+};
+
+/* ============================================================
+   POV AI IMAGE PROMPT GENERATOR MODAL LOGIC
+============================================================ */
+const promptsModal           = document.getElementById('promptsModal');
+const btnOpenPromptsModal    = document.getElementById('btnOpenPromptsModal');
+const promptsModalClose      = document.getElementById('promptsModalClose');
+const btnRunGeneratePrompts  = document.getElementById('btnRunGeneratePrompts');
+const btnRunPromptsText      = document.getElementById('btnRunPromptsText');
+const promptStyleSelect      = document.getElementById('promptStyleSelect');
+const promptGeneratorSelect  = document.getElementById('promptGeneratorSelect');
+const promptsEmptyState      = document.getElementById('promptsEmptyState');
+const promptsLoadingState    = document.getElementById('promptsLoadingState');
+const promptsContent         = document.getElementById('promptsContent');
+const promptsThemeText       = document.getElementById('promptsThemeText');
+const promptsCountBadge      = document.getElementById('promptsCountBadge');
+const promptsCardsList       = document.getElementById('promptsCardsList');
+const btnCopyAllPrompts      = document.getElementById('btnCopyAllPrompts');
+const btnApplyPromptsToTimeline = document.getElementById('btnApplyPromptsToTimeline');
+
+let lastGeneratedPrompts = [];
+
+if (btnOpenPromptsModal) {
+  btnOpenPromptsModal.onclick = () => {
+    promptsModal.classList.remove('hidden');
+    if (window.lucide) window.lucide.createIcons();
+  };
+}
+if (promptsModalClose) {
+  promptsModalClose.onclick = () => promptsModal.classList.add('hidden');
+}
+if (promptsModal) {
+  promptsModal.onclick = e => { if (e.target === promptsModal) promptsModal.classList.add('hidden'); };
+}
+
+async function generatePOVPrompts() {
+  const scriptText = scriptInput.value.trim();
+  const currentScenes = splitScriptIntoScenes(detectScenes(scriptText));
+  
+  if (!scriptText && !currentScenes.length) {
+    alert('Please enter or paste a script first.');
+    return;
+  }
+  if (currentScenes.length && (
+    currentScenes.length !== sceneData.length ||
+    currentScenes.some((text, index) => text !== sceneData[index].text)
+  )) {
+    buildScenes(currentScenes);
+  }
+
+  promptsEmptyState.classList.add('hidden');
+  promptsContent.classList.add('hidden');
+  promptsLoadingState.classList.remove('hidden');
+  btnRunGeneratePrompts.disabled = true;
+  btnRunPromptsText.textContent = 'Engineering Prompts...';
+
+  try {
+    const resp = await fetch('{% url "narration_generate_prompts" %}', {
+      method: 'POST',
+      body: JSON.stringify({
+        script: scriptText,
+        scenes: currentScenes,
+        style: promptStyleSelect.value,
+        aspect_ratio: document.getElementById('aspectSelect').value,
+        generator: promptGeneratorSelect.value
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+      }
+    });
+
+    const res = await resp.json();
+    if (!res.success || !res.data) {
+      alert(res.error || 'Failed to generate image prompts.');
+      promptsEmptyState.classList.remove('hidden');
+      return;
+    }
+
+    const data = res.data;
+    lastGeneratedPrompts = data.scene_prompts || [];
+
+    promptsThemeText.textContent = data.visual_theme || 'POV Narrative Visualization';
+    promptsCountBadge.textContent = `${lastGeneratedPrompts.length} scene prompt${lastGeneratedPrompts.length !== 1 ? 's' : ''} generated`;
+
+    promptsCardsList.innerHTML = '';
+    lastGeneratedPrompts.forEach((item, index) => {
+      const card = document.createElement('div');
+      card.className = 'p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2.5';
+      card.innerHTML = `
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-violet-500/20 text-violet-300">Scene ${item.scene_number || (index + 1)}</span>
+            ${item.camera_angle ? `<span class="text-[9px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">${item.camera_angle}</span>` : ''}
+            ${item.lighting ? `<span class="text-[9px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">${item.lighting}</span>` : ''}
+          </div>
+          <button type="button" class="btn-copy-single-prompt text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 flex items-center transition-colors" data-index="${index}">
+            Copy Prompt
+          </button>
+        </div>
+        <p class="text-[11px] text-zinc-400 italic line-clamp-2">"${item.scene_text}"</p>
+        <div class="p-2.5 rounded-lg bg-zinc-950 border border-zinc-800 text-xs text-violet-200 font-mono leading-relaxed select-all">
+          ${item.image_prompt}
+        </div>
+      `;
+      promptsCardsList.appendChild(card);
+    });
+
+    promptsCardsList.querySelectorAll('.btn-copy-single-prompt').forEach(btn => {
+      btn.onclick = () => {
+        const idx = parseInt(btn.dataset.index);
+        const item = lastGeneratedPrompts[idx];
+        if (item && item.image_prompt) {
+          navigator.clipboard.writeText(item.image_prompt);
+          const origText = btn.innerHTML;
+          btn.innerHTML = 'Copied!';
+          setTimeout(() => { btn.innerHTML = origText; }, 1800);
+        }
+      };
+    });
+
+    promptsContent.classList.remove('hidden');
+
+  } catch (err) {
+    alert('An error occurred while communicating with Gemini AI.');
+    promptsEmptyState.classList.remove('hidden');
+  } finally {
+    promptsLoadingState.classList.add('hidden');
+    btnRunGeneratePrompts.disabled = false;
+    btnRunPromptsText.textContent = 'Generate Prompts with Gemini';
+  }
+}
+
+if (btnRunGeneratePrompts) btnRunGeneratePrompts.onclick = generatePOVPrompts;
+
+if (btnCopyAllPrompts) {
+  btnCopyAllPrompts.onclick = () => {
+    if (!lastGeneratedPrompts.length) return;
+    const fullText = lastGeneratedPrompts.map(p => `Scene ${p.scene_number}:\n${p.image_prompt}`).join('\n\n');
+    navigator.clipboard.writeText(fullText);
+    const orig = btnCopyAllPrompts.innerHTML;
+    btnCopyAllPrompts.innerHTML = 'Copied All!';
+    setTimeout(() => { btnCopyAllPrompts.innerHTML = orig; }, 1800);
+  };
+}
+
+if (btnApplyPromptsToTimeline) {
+  btnApplyPromptsToTimeline.onclick = () => {
+    if (!lastGeneratedPrompts.length) return;
+    if (
+      sceneData.length !== lastGeneratedPrompts.length ||
+      lastGeneratedPrompts.some((item, index) => item.scene_text !== sceneData[index].text)
+    ) {
+      alert('The script scenes have changed. Generate prompts again to keep every image matched to its narration.');
+      return;
+    }
+    if (!sceneData.length) {
+      buildScenes(detectScenes(scriptInput.value));
+    }
+    lastGeneratedPrompts.forEach((item, i) => {
+      if (sceneData[i]) {
+        sceneData[i].image_prompt = item.image_prompt;
+      }
+    });
+    renderTimeline();
+    const orig = btnApplyPromptsToTimeline.innerHTML;
+    btnApplyPromptsToTimeline.innerHTML = 'Applied to Scenes!';
+    setTimeout(() => { btnApplyPromptsToTimeline.innerHTML = orig; }, 1800);
+  };
+}
 </script>
 {% endblock %}

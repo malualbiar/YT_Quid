@@ -6,6 +6,7 @@ import re
 import zipfile
 import threading
 import tempfile
+import logging
 from io import BytesIO
 from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
@@ -26,7 +27,10 @@ from .services.lyrics_engine import LyricsEngineService
 from .services.process_tracker import RenderProcessTracker
 from .services.gemini_video_analyzer import analysis_limits
 from .services.narration_engine import NarrationEngineService, NarrationEngineError
+from apps.ai.services.gemini_service import GeminiContentService
 from apps.videos.models import Video
+
+logger = logging.getLogger(__name__)
 
 @login_required
 def studio_home_view(request):
@@ -71,7 +75,23 @@ def narration_maker_view(request):
         messages.error(request, 'Access denied. Super Admin privileges required.')
         return redirect('dashboard')
     return render(request, 'studio/narration_maker.html', {
-        'voices': [('af_heart', 'Heart (US Female)'), ('af_bella', 'Bella (US Female)'), ('am_adam', 'Adam (US Male)'), ('am_michael', 'Michael (US Male)')],
+        'voices': [
+            # US English — Female
+            ('en-US-AvaMultilingualNeural',    'Ava — US Female (Warm, natural)'),
+            ('en-US-JennyNeural',              'Jenny — US Female (Friendly, clear)'),
+            ('en-US-AriaNeural',               'Aria — US Female (Expressive)'),
+            ('en-US-MichelleNeural',           'Michelle — US Female (Smooth)'),
+            # US English — Male
+            ('en-US-AndrewMultilingualNeural', 'Andrew — US Male (Deep, authoritative)'),
+            ('en-US-GuyNeural',                'Guy — US Male (News-style)'),
+            ('en-US-BrianMultilingualNeural',  'Brian — US Male (Conversational)'),
+            # UK English
+            ('en-GB-SoniaNeural',              'Sonia — UK Female (British accent)'),
+            ('en-GB-RyanNeural',               'Ryan — UK Male (British accent)'),
+            # Australian English
+            ('en-AU-NatashaNeural',            'Natasha — AU Female (Australian)'),
+            ('en-AU-WilliamNeural',            'William — AU Male (Australian)'),
+        ],
     })
 
 
@@ -81,29 +101,74 @@ def _narration_scenes_from_request(request, project):
     except json.JSONDecodeError as exc:
         raise NarrationEngineError('The scene plan is invalid. Reorganize the scenes and try again.') from exc
     images = request.FILES.getlist('scene_images')
-    if not images:
-        raise NarrationEngineError('Add at least one AI-generated image.')
     if not isinstance(requested_scenes, list) or not requested_scenes:
         raise NarrationEngineError('Create scenes from your script before rendering.')
+    if len(requested_scenes) > NarrationEngineService.MAX_SCENES:
+        raise NarrationEngineError(
+            f'A POV narration can have no more than {NarrationEngineService.MAX_SCENES} image scenes.'
+        )
+    if len(images) > NarrationEngineService.MAX_SCENES:
+        raise NarrationEngineError(
+            f'Upload no more than {NarrationEngineService.MAX_SCENES} scene images.'
+        )
+
+    has_images = bool(images) or any(isinstance(raw, dict) and (raw.get('image_name') or raw.get('custom_image_url')) for raw in requested_scenes)
+    if not has_images:
+        raise NarrationEngineError('Add at least one AI-generated image.')
 
     scenes = []
+    saved_images = {}
+    allowed_camera_effects = {'auto', 'impact_shake', 'handheld', 'none'}
+    allowed_atmosphere_effects = {
+        'auto', 'none', 'dust', 'fog', 'sun_rays', 'rain', 'snow', 'smoke',
+        'embers', 'lightning', 'candle_flicker', 'glow', 'flash', 'vignette',
+    }
     for index, raw_scene in enumerate(requested_scenes):
         image_index = raw_scene.get('image_index', index) if isinstance(raw_scene, dict) else index
-        try:
-            image = images[int(image_index)]
-        except (IndexError, TypeError, ValueError):
-            raise NarrationEngineError(f'Scene {index + 1} does not have a valid image.')
+        saved_name = None
+        
+        if images:
+            if not isinstance(image_index, int) or not 0 <= image_index < len(images):
+                image_index = index % len(images)
+            if image_index not in saved_images:
+                image = images[image_index]
+                saved_images[image_index] = default_storage.save(
+                    f'studio/narration_images/{project.pk}/{image.name}',
+                    image,
+                )
+            saved_name = saved_images[image_index]
+        elif raw_scene.get('image_name'):
+            saved_name = raw_scene.get('image_name')
+        
+        if not saved_name:
+            raise NarrationEngineError(f'Scene {index + 1} does not have an image assigned.')
+
         text = str(raw_scene.get('text', '')).strip()
         if not text:
             raise NarrationEngineError(f'Scene {index + 1} needs narration text.')
-        saved_name = default_storage.save(f'studio/narration_images/{project.pk}/{image.name}', image)
+
+        camera_effect = str(raw_scene.get('camera_effect', 'auto'))
+        if camera_effect not in allowed_camera_effects:
+            raise NarrationEngineError(f'Scene {index + 1} has an unsupported camera effect.')
+        atmosphere_effect = str(raw_scene.get('atmosphere_effect', 'auto'))
+        if atmosphere_effect not in allowed_atmosphere_effects:
+            raise NarrationEngineError(f'Scene {index + 1} has an unsupported atmosphere effect.')
+
+        audio_path = raw_scene.get('audio_path')
+        if audio_path and not os.path.isabs(audio_path):
+            audio_path = default_storage.path(audio_path) if default_storage.exists(audio_path) else audio_path
+
         scenes.append({
             'id': index + 1,
             'text': text,
             'image_name': saved_name,
             'image_url': default_storage.url(saved_name),
             'movement': str(raw_scene.get('movement', 'zoom_in')),
+            'camera_effect': camera_effect,
+            'atmosphere_effect': atmosphere_effect,
             'effect': str(raw_scene.get('effect', 'cinematic')),
+            'audio_path': audio_path,
+            'duration_seconds': float(raw_scene.get('duration_seconds', 0)),
         })
     return scenes
 
@@ -112,17 +177,32 @@ def _execute_narration_render(project_id):
     connections.close_all()
     try:
         project = NarrationVideoProject.objects.get(pk=project_id)
-        scenes = [dict(scene, image_path=default_storage.path(scene['image_name'])) for scene in project.scenes_data]
+        scenes = []
+        for scene in project.scenes_data:
+            s = dict(scene, image_path=default_storage.path(scene['image_name']))
+            if scene.get('audio_path'):
+                s['audio_path'] = scene['audio_path']
+            scenes.append(s)
+
         output_dir = os.path.join(settings.MEDIA_ROOT, 'studio', 'narration_output', str(project.pk))
         video_path = os.path.join(output_dir, 'narrated_story.mp4')
         audio_path = os.path.join(output_dir, 'narration.wav')
         RenderProcessTracker.clear_cancelled('narration', project.pk)
-        RenderProcessTracker.set_progress('narration', project.pk, 5, 'Generating Kokoro narration...')
+        RenderProcessTracker.set_progress('narration', project.pk, 5, 'Generating voice narration & compiling timeline clips...')
 
         def report(done, total, message):
             RenderProcessTracker.set_progress('narration', project.pk, 10 + int(done * 80 / max(total, 1)), message)
 
-        duration = NarrationEngineService.render(scenes, project.voice, project.aspect_ratio, video_path, audio_path, report)
+        caption_options = {
+            'show_captions': project.show_captions,
+            'style': project.caption_style,
+            'position': project.caption_position,
+            'font_size': project.caption_font_size,
+        }
+
+        duration = NarrationEngineService.render(
+            scenes, project.voice, project.aspect_ratio, video_path, audio_path, report, caption_options=caption_options
+        )
         if RenderProcessTracker.is_cancelled('narration', project.pk):
             project.render_status = NarrationVideoProject.Status.CANCELLED
             project.save(update_fields=['render_status', 'updated_at'])
@@ -132,6 +212,21 @@ def _execute_narration_render(project_id):
             project.output_video.save(f'narrated_story_{project.pk}.mp4', File(video_file), save=False)
             project.narration_audio.save(f'narration_{project.pk}.wav', File(audio_file), save=False)
         project.duration_seconds = duration
+        RenderProcessTracker.set_progress('narration', project.pk, 92, 'Generating YouTube title, description & thumbnail prompt...')
+        try:
+            metadata = GeminiContentService.generate_narration_youtube_metadata(
+                script=project.script,
+                working_title=project.title,
+            )
+            if not metadata:
+                raise RuntimeError('Gemini did not return a complete YouTube title, description, and thumbnail prompt.')
+            project.youtube_metadata = metadata
+            project.youtube_metadata_error = ''
+        except Exception as metadata_exc:
+            logger.exception('YouTube metadata generation failed for narration project %s.', project.pk)
+            project.youtube_metadata = {}
+            project.youtube_metadata_error = str(metadata_exc)
+
         project.render_status = NarrationVideoProject.Status.COMPLETED
         project.error_message = ''
         project.save()
@@ -149,14 +244,184 @@ def _execute_narration_render(project_id):
 
 @login_required
 @require_POST
+def narration_synthesize_all_audio_view(request):
+    """Synthesizes Edge-TTS audio clips for all scenes concurrently before rendering final video."""
+    if not request.user.is_super_admin:
+        return JsonResponse({'error': 'Super Admin privileges required.'}, status=403)
+    try:
+        data = json.loads(request.body)
+        scenes = data.get('scenes', [])
+        voice = data.get('voice', 'en-US-AvaMultilingualNeural')
+        
+        if not scenes:
+            return JsonResponse({'error': 'No scenes provided.'}, status=400)
+
+        temp_id = int(time.time() * 1000)
+        output_dir = os.path.join(settings.MEDIA_ROOT, 'studio', 'narration_temp_audio', str(temp_id))
+        
+        batch_results = NarrationEngineService.synthesize_scenes_batch(scenes, voice, output_dir)
+
+        synthesized_scenes = []
+        for res in batch_results:
+            idx = res['index']
+            abs_path = res['audio_path']
+            filename = os.path.basename(abs_path)
+            rel_name = f"studio/narration_temp_audio/{temp_id}/{filename}"
+            audio_url = default_storage.url(rel_name) if default_storage.exists(rel_name) else f"{settings.MEDIA_URL}{rel_name}"
+
+            synthesized_scenes.append({
+                'index': idx,
+                'text': res['text'],
+                'audio_url': audio_url,
+                'audio_path': abs_path,
+                'duration_seconds': res['duration_seconds'],
+            })
+
+        return JsonResponse({'success': True, 'scenes': synthesized_scenes})
+    except Exception as exc:
+        return JsonResponse({'error': f'Audio synthesis error: {exc}'}, status=500)
+
+
+@login_required
+@require_POST
+def narration_synthesize_scene_audio_view(request):
+    """Re-synthesizes audio for a single modified scene line."""
+    if not request.user.is_super_admin:
+        return JsonResponse({'error': 'Super Admin privileges required.'}, status=403)
+    try:
+        data = json.loads(request.body)
+        text = str(data.get('text', '')).strip()
+        voice = data.get('voice', 'en-US-AvaMultilingualNeural')
+        index = data.get('index', 0)
+
+        if not text:
+            return JsonResponse({'error': 'Text is empty.'}, status=400)
+
+        temp_id = int(time.time() * 1000)
+        output_dir = os.path.join(settings.MEDIA_ROOT, 'studio', 'narration_temp_audio', str(temp_id))
+        os.makedirs(output_dir, exist_ok=True)
+
+        filename = f"scene_{index + 1}_{temp_id}.wav"
+        abs_path = os.path.join(output_dir, filename)
+        rel_name = f"studio/narration_temp_audio/{temp_id}/{filename}"
+
+        duration = NarrationEngineService.synthesize_scene(text, voice, abs_path)
+        audio_url = default_storage.url(rel_name) if default_storage.exists(rel_name) else f"{settings.MEDIA_URL}{rel_name}"
+
+        return JsonResponse({
+            'success': True,
+            'index': index,
+            'text': text,
+            'audio_url': audio_url,
+            'audio_path': abs_path,
+            'duration_seconds': duration,
+        })
+    except Exception as exc:
+        return JsonResponse({'error': f'Scene audio synthesis error: {exc}'}, status=500)
+
+
+@login_required
+@require_POST
+def narration_preview_voice_view(request):
+    """Generates a quick audio sample for auditioning selected Edge-TTS neural voices."""
+    if not request.user.is_super_admin:
+        return JsonResponse({'error': 'Super Admin privileges required.'}, status=403)
+    try:
+        data = json.loads(request.body) if request.content_type == 'application/json' else request.POST
+        voice = data.get('voice', 'en-US-AvaMultilingualNeural').strip()
+        sample_text = data.get('text', '').strip() or "Welcome to the POV Narration Studio. This is how I will sound narrating your story."
+
+        import hashlib
+        hash_id = hashlib.md5(f"{voice}|{sample_text}".encode()).hexdigest()[:12]
+        output_dir = os.path.join(settings.MEDIA_ROOT, 'studio', 'voice_previews')
+        os.makedirs(output_dir, exist_ok=True)
+        filename = f"preview_{hash_id}.wav"
+        abs_path = os.path.join(output_dir, filename)
+        rel_name = f"studio/voice_previews/{filename}"
+
+        if not os.path.exists(abs_path):
+            NarrationEngineService.synthesize_scene(sample_text, voice, abs_path)
+
+        audio_url = default_storage.url(rel_name) if default_storage.exists(rel_name) else f"{settings.MEDIA_URL}{rel_name}"
+        return JsonResponse({'success': True, 'voice': voice, 'audio_url': audio_url})
+    except Exception as exc:
+        return JsonResponse({'error': f'Voice audition failed: {exc}'}, status=500)
+
+
+@login_required
+@require_POST
+def narration_ai_structure_script_view(request):
+    """Uses Gemini AI to break down raw script into structured visual scenes."""
+    if not request.user.is_super_admin:
+        return JsonResponse({'error': 'Super Admin privileges required.'}, status=403)
+    try:
+        data = json.loads(request.body) if request.content_type == 'application/json' else request.POST
+        script = data.get('script', '').strip()
+        if not script:
+            return JsonResponse({'error': 'Script text is required.'}, status=400)
+
+        res = GeminiContentService.structure_script_into_scenes(script)
+        if not res or not res.get('scenes'):
+            return JsonResponse({'error': 'Could not structure script with Gemini AI. Check GEMINI_API_KEY.'}, status=500)
+
+        return JsonResponse({'success': True, 'data': res})
+    except Exception as exc:
+        return JsonResponse({'error': f'Script structuring error: {exc}'}, status=500)
+
+
+@login_required
+@require_POST
+def narration_reorder_scenes_view(request):
+    """Uses Gemini AI to suggest the best narrative order for existing scenes."""
+    if not request.user.is_super_admin:
+        return JsonResponse({'error': 'Super Admin privileges required.'}, status=403)
+    try:
+        data = json.loads(request.body) if request.content_type == 'application/json' else request.POST
+        scene_texts_raw = data.get('scene_texts', '').strip()
+        if not scene_texts_raw:
+            return JsonResponse({'error': 'scene_texts is required.'}, status=400)
+
+        # Parse "Scene N: <text>" lines
+        scene_texts = []
+        for line in scene_texts_raw.splitlines():
+            line = line.strip()
+            if line:
+                # Strip "Scene N: " prefix if present
+                if ':' in line:
+                    scene_texts.append(line.split(':', 1)[1].strip())
+                else:
+                    scene_texts.append(line)
+
+        if len(scene_texts) < 2:
+            return JsonResponse({'error': 'Need at least 2 scenes to reorder.'}, status=400)
+
+        order = GeminiContentService.reorder_scenes_by_narrative_logic(scene_texts)
+        return JsonResponse({'success': True, 'order': order})
+    except Exception as exc:
+        return JsonResponse({'error': f'Scene reorder error: {exc}'}, status=500)
+
+
+@login_required
+@require_POST
 def narration_render_view(request):
     if not request.user.is_super_admin:
         return JsonResponse({'error': 'Super Admin privileges required.'}, status=403)
+    
+    show_captions = request.POST.get('show_captions', 'on') in ('on', 'true', '1', 'True')
+    try:
+        font_size = int(request.POST.get('caption_font_size', 48))
+    except (ValueError, TypeError):
+        font_size = 48
+
     project = NarrationVideoProject.objects.create(
         title=request.POST.get('title', '').strip()[:255] or 'Untitled POV Story',
         script=request.POST.get('script', '').strip(),
-        voice=request.POST.get('voice', 'af_heart').strip(),
-        aspect_ratio=request.POST.get('aspect_ratio', NarrationVideoProject.AspectRatio.VERTICAL),
+        voice=request.POST.get('voice', 'en-US-AvaMultilingualNeural').strip(),
+        aspect_ratio=request.POST.get('aspect_ratio', NarrationVideoProject.AspectRatio.LANDSCAPE),
+        show_captions=show_captions,
+        caption_style=request.POST.get('caption_style', NarrationVideoProject.CaptionStyle.BEAST_YELLOW),
+        caption_position=request.POST.get('caption_position', NarrationVideoProject.CaptionPosition.BOTTOM),
+        caption_font_size=font_size,
         render_status=NarrationVideoProject.Status.RENDERING,
     )
     try:
@@ -175,6 +440,88 @@ def narration_detail_view(request, pk):
         messages.error(request, 'Access denied. Super Admin privileges required.')
         return redirect('dashboard')
     return render(request, 'studio/narration_detail.html', {'project': get_object_or_404(NarrationVideoProject, pk=pk)})
+
+
+@login_required
+def narration_download_video_view(request, pk):
+    if not request.user.is_super_admin:
+        return HttpResponse('Access denied', status=403)
+
+    project = get_object_or_404(NarrationVideoProject, pk=pk)
+    if not project.output_video or not os.path.isfile(project.output_video.path):
+        return HttpResponse('Output video file not found.', status=404)
+
+    return FileResponse(
+        open(project.output_video.path, 'rb'),
+        as_attachment=True,
+        filename=f'{project.title}.mp4',
+        content_type='video/mp4',
+    )
+
+
+@login_required
+@require_POST
+def narration_generate_youtube_metadata_view(request, pk):
+    if not request.user.is_super_admin:
+        return JsonResponse({'error': 'Super Admin privileges required.'}, status=403)
+
+    project = get_object_or_404(NarrationVideoProject, pk=pk)
+    if project.render_status != NarrationVideoProject.Status.COMPLETED or not project.output_video:
+        return JsonResponse({'error': 'YouTube metadata is available after the narration render completes.'}, status=409)
+
+    try:
+        metadata = GeminiContentService.generate_narration_youtube_metadata(
+            script=project.script,
+            working_title=project.title,
+        )
+        if not metadata:
+            raise RuntimeError('Gemini did not return a complete YouTube title, description, and thumbnail prompt.')
+    except Exception as exc:
+        logger.exception('YouTube metadata regeneration failed for narration project %s.', project.pk)
+        project.youtube_metadata_error = str(exc)
+        project.save(update_fields=['youtube_metadata_error', 'updated_at'])
+        return JsonResponse({'error': str(exc)}, status=502)
+
+    project.youtube_metadata = metadata
+    project.youtube_metadata_error = ''
+    project.save(update_fields=['youtube_metadata', 'youtube_metadata_error', 'updated_at'])
+    return JsonResponse({'success': True, 'data': metadata})
+
+
+@login_required
+@require_POST
+def narration_generate_prompts_view(request):
+    """AJAX endpoint for generating POV scene image prompts from script."""
+    if not request.user.is_super_admin:
+        return JsonResponse({'error': 'Super Admin privileges required.'}, status=403)
+    try:
+        if request.content_type == 'application/json':
+            data = json.loads(request.body)
+        else:
+            data = request.POST
+
+        script = data.get('script', '').strip()
+        scenes = data.get('scenes', [])
+        style = data.get('style', 'cinematic')
+        aspect_ratio = data.get('aspect_ratio', '16:9')
+        generator = data.get('generator', 'gemini')
+
+        if not script and not scenes:
+            return JsonResponse({'error': 'Script text or scenes are required.'}, status=400)
+
+        result = GeminiContentService.generate_pov_image_prompts(
+            script=script,
+            scenes=scenes,
+            style=style,
+            aspect_ratio=aspect_ratio,
+            generator=generator,
+        )
+        if not result:
+            return JsonResponse({'error': 'Failed to generate prompts. Check your GEMINI_API_KEY in .env file.'}, status=500)
+
+        return JsonResponse({'success': True, 'data': result})
+    except Exception as exc:
+        return JsonResponse({'error': f'Prompt generation error: {exc}'}, status=500)
 
 
 @login_required

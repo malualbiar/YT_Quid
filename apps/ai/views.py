@@ -96,6 +96,15 @@ def ai_generate_view(request):
             count=int(context.get('count', 15)),
         )
 
+    elif content_type in ('pov_prompts', 'pov_image_prompts'):
+        result = GeminiContentService.generate_pov_image_prompts(
+            script=context.get('script', ''),
+            scenes=context.get('scenes', []),
+            style=context.get('style', 'cinematic'),
+            aspect_ratio=context.get('aspect_ratio', '9:16'),
+            generator=context.get('generator', 'midjourney'),
+        )
+
     else:
         return JsonResponse({'error': f'Unknown content_type: {content_type}'}, status=400)
 

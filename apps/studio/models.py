@@ -79,11 +79,30 @@ class NarrationVideoProject(models.Model):
         VERTICAL = '9:16', 'Vertical 9:16'
         LANDSCAPE = '16:9', 'Landscape 16:9'
 
+    class CaptionStyle(models.TextChoices):
+        BEAST_YELLOW = 'BEAST_YELLOW', 'MrBeast Yellow Highlight'
+        NEON_CYAN    = 'NEON_CYAN',    'Cyber Neon Cyan'
+        FIRE_PUNCH   = 'FIRE_PUNCH',   'Fire Punch Orange'
+        CLEAN_WHITE  = 'CLEAN_WHITE',  'Classic Bold White'
+        CINEMATIC    = 'CINEMATIC',    'Cinematic Minimal Serif'
+        BOXED_DARK   = 'BOXED_DARK',   'Dark Pill Box'
+
+    class CaptionPosition(models.TextChoices):
+        BOTTOM = 'BOTTOM', 'Bottom Third'
+        CENTER = 'CENTER', 'Center Focal'
+        TOP    = 'TOP',    'Top Header'
+
     title = models.CharField(max_length=255, default='Untitled POV Story')
     script = models.TextField(blank=True, default='')
     voice = models.CharField(max_length=80, default='af_heart')
-    aspect_ratio = models.CharField(max_length=8, choices=AspectRatio.choices, default=AspectRatio.VERTICAL)
+    aspect_ratio = models.CharField(max_length=8, choices=AspectRatio.choices, default=AspectRatio.LANDSCAPE)
+    show_captions = models.BooleanField(default=True)
+    caption_style = models.CharField(max_length=30, choices=CaptionStyle.choices, default=CaptionStyle.BEAST_YELLOW)
+    caption_position = models.CharField(max_length=20, choices=CaptionPosition.choices, default=CaptionPosition.BOTTOM)
+    caption_font_size = models.IntegerField(default=48)
     scenes_data = models.JSONField(default=list, blank=True)
+    youtube_metadata = models.JSONField(default=dict, blank=True)
+    youtube_metadata_error = models.TextField(blank=True, default='')
     narration_audio = models.FileField(upload_to='studio/narration_audio/', blank=True, null=True)
     output_video = models.FileField(upload_to='studio/narration_videos/', blank=True, null=True)
     duration_seconds = models.FloatField(default=0)
@@ -360,16 +379,24 @@ class ShortVideoProject(models.Model):
         chops = self.chops_data or []
         chop = chops[chop_index] if chop_index < len(chops) else {}
         part_label = f"Part {chop_index + 1}"
-        rendered_title = str(chop.get('title') or chop.get('ai_title', '')).strip()
-        if rendered_title and rendered_title.lower() != part_label.lower():
-            # The generated moment title is the title of this clip, not a suffix
-            # to the original long-form video's title.
-            return rendered_title[:100]
-        hook = chop.get('hook_text', '').strip()
-        # Use original YouTube video title if available, otherwise project title
         base_title = self.yt_video_title.strip() if self.yt_video_title else self.title
+
+        # 1. AI-generated viral title (from clip analysis) — used as-is, no prefix
+        # The generated moment title is the title of this clip, not a suffix
+        # to the original long-form video's title.
+        ai_title = str(chop.get('ai_title', '')).strip()
+        if ai_title and ai_title.lower() != part_label.lower():
+            return ai_title[:100]
+
+        # 2. Meaningful chop title (manually set or from analysis, not just "Part N")
+        chop_title = str(chop.get('title', '')).strip()
+        if chop_title and chop_title.lower() != part_label.lower():
+            return f"{base_title} - {chop_title}"[:100]
+
+        # 3. Fall back: original video title + part label + hook text
+        hook = chop.get('hook_text', '').strip()
         if hook:
-            return f"{base_title} ({part_label}) - {hook} 🔥 #shorts #fyp #viral"
+            return f"{base_title} ({part_label}) - {hook} 🔥 #shorts #fyp #viral"[:100]
         return f"{base_title} - {part_label} 🔥 #shorts #trending #newvideo"
 
     def youtube_description_for_chop(self, chop_index=0):

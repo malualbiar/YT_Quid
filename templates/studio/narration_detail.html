@@ -1,11 +1,310 @@
 {% extends 'base.html' %}
-{% block title %}{{ project.title }} - Narration Studio{% endblock %}
+{% block title %}{{ project.title }} — Narration Studio{% endblock %}
+
 {% block content %}
 <div class="max-w-4xl mx-auto space-y-6 pb-20">
-  <div class="flex items-end justify-between gap-3"><div><p class="text-[10px] uppercase tracking-[.2em] text-violet-300 font-bold">POV narration</p><h2 class="text-2xl font-bold text-white mt-1">{{ project.title }}</h2></div><a href="{% url 'narration_maker' %}" class="px-3 py-2 rounded-xl bg-zinc-800 text-xs text-white">New video</a></div>
-  <section class="rounded-2xl border border-zinc-800 bg-zinc-900 p-5 space-y-4">
-    {% if project.render_status == 'COMPLETED' and project.output_video %}<video controls class="w-full max-h-[70vh] rounded-xl bg-black"><source src="{{ project.output_video.url }}" type="video/mp4"></video><a class="inline-flex px-3 py-2 rounded-lg bg-violet-400 text-zinc-950 text-xs font-bold" href="{{ project.output_video.url }}" download>Download video</a>{% elif project.render_status == 'FAILED' %}<p class="text-sm text-rose-300">Render failed: {{ project.error_message }}</p><a href="{% url 'narration_maker' %}" class="text-xs text-violet-300">Return to editor</a>{% else %}<p class="text-sm text-zinc-300">Rendering {{ project.scenes_data|length }} scene{{ project.scenes_data|length|pluralize }} with Kokoro narration and cinematic movement…</p><meta http-equiv="refresh" content="4">{% endif %}
+
+  {# ── Header ─────────────────────────────────────────────────────── #}
+  <div class="flex items-start justify-between gap-3">
+    <div>
+      <p class="text-[10px] uppercase tracking-[.2em] text-violet-300 font-bold">POV Narration</p>
+      <h2 class="text-2xl font-bold text-white mt-1">{{ project.title }}</h2>
+      <p class="text-xs text-zinc-500 mt-1">{{ project.scenes_data|length }} scene{{ project.scenes_data|length|pluralize }}
+        · {{ project.aspect_ratio }} · {{ project.voice }}</p>
+    </div>
+    <div class="flex gap-2 shrink-0">
+      <a href="{% url 'narration_maker' %}"
+         class="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-white transition-colors">+ New video</a>
+      <a href="{% url 'studio_home' %}"
+         class="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-400 transition-colors">← Studio</a>
+    </div>
+  </div>
+
+  {# ── Status card ─────────────────────────────────────────────────── #}
+  {% if project.render_status == 'COMPLETED' and project.output_video %}
+
+    {# DONE — video player #}
+    <section class="rounded-2xl bg-zinc-900 border border-zinc-800 overflow-hidden">
+      <video controls class="w-full max-h-[70vh] bg-black">
+        <source src="{{ project.output_video.url }}" type="video/mp4">
+      </video>
+      <div class="flex flex-wrap gap-3 p-4">
+        <a href="{% url 'narration_download_video' project.pk %}"
+           class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-400 hover:bg-violet-300 text-zinc-950 text-xs font-bold transition-colors">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i> Download video
+        </a>
+        {% if project.narration_audio %}
+        <a href="{{ project.narration_audio.url }}" download
+           class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold transition-colors">
+          <i data-lucide="music" class="w-3.5 h-3.5"></i> Download audio
+        </a>
+        {% endif %}
+      </div>
+    </section>
+
+  {% elif project.render_status == 'FAILED' %}
+
+    {# FAILED #}
+    <section class="rounded-2xl bg-zinc-900 border border-rose-500/30 p-6 space-y-3">
+      <div class="flex items-center gap-2 text-rose-400">
+        <i data-lucide="alert-circle" class="w-5 h-5"></i>
+        <span class="text-sm font-bold">Render failed</span>
+      </div>
+      <p class="text-xs text-zinc-400 leading-relaxed">{{ project.error_message }}</p>
+      <a href="{% url 'narration_maker' %}" class="inline-flex items-center gap-1 text-xs text-violet-300 hover:text-violet-200 transition-colors">
+        <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Return to editor
+      </a>
+    </section>
+
+  {% elif project.render_status == 'CANCELLED' %}
+
+    {# CANCELLED #}
+    <section class="rounded-2xl bg-zinc-900 border border-zinc-700 p-6 space-y-3">
+      <div class="flex items-center gap-2 text-zinc-400">
+        <i data-lucide="ban" class="w-5 h-5"></i>
+        <span class="text-sm font-bold">Render cancelled</span>
+      </div>
+      <a href="{% url 'narration_maker' %}" class="inline-flex items-center gap-1 text-xs text-violet-300 hover:text-violet-200 transition-colors">
+        <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Return to editor
+      </a>
+    </section>
+
+  {% else %}
+
+    {# RENDERING — live progress bar #}
+    <section id="renderCard" class="rounded-2xl bg-zinc-900 border border-violet-500/25 p-6 space-y-5">
+
+      {# Animated header #}
+      <div class="flex items-center gap-3">
+        <span class="relative flex h-3 w-3">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-violet-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-3 w-3 bg-violet-500"></span>
+        </span>
+        <span class="text-sm font-bold text-white">Rendering your narrated story…</span>
+        <span id="elapsedTime" class="ml-auto text-xs text-zinc-500 tabular-nums">0s</span>
+      </div>
+
+      {# Progress bar #}
+      <div class="space-y-2">
+        <div class="w-full bg-zinc-800 rounded-full h-3 overflow-hidden">
+          <div id="progressBar"
+               class="h-3 rounded-full bg-gradient-to-r from-violet-600 to-violet-400 transition-all duration-500 ease-out"
+               style="width: 3%"></div>
+        </div>
+        <div class="flex items-center justify-between">
+          <p id="progressStep" class="text-xs text-zinc-400">Preparing render pipeline…</p>
+          <span id="progressPct" class="text-xs font-bold text-violet-300 tabular-nums">3%</span>
+        </div>
+      </div>
+
+      {# Scene mini-previews while waiting #}
+      {% if project.scenes_data %}
+      <div class="space-y-2">
+        <p class="text-[10px] uppercase tracking-widest text-zinc-600 font-semibold">Queued scenes</p>
+        <div class="flex gap-2 overflow-x-auto pb-1">
+          {% for scene in project.scenes_data %}
+          <div class="shrink-0 relative rounded-lg overflow-hidden border border-zinc-800" style="width:64px; height:80px">
+            <img src="{{ scene.image_url }}" alt="Scene {{ scene.id }}" class="w-full h-full object-cover">
+            <div class="absolute bottom-0 inset-x-0 bg-black/60 text-[8px] font-bold text-violet-300 text-center py-0.5">S{{ scene.id }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {# Cancel button #}
+      <form method="post" action="{% url 'studio_cancel_render' 'narration' project.pk %}">
+        {% csrf_token %}
+        <button type="submit"
+          class="text-xs text-zinc-500 hover:text-rose-400 transition-colors underline underline-offset-2">
+          Cancel render
+        </button>
+      </form>
+
+    </section>
+
+  {% endif %}
+
+  {# ── Scene cards ─────────────────────────────────────────────────── #}
+  {% if project.render_status == 'COMPLETED' and project.output_video %}
+  <section class="rounded-2xl bg-zinc-900 border border-zinc-800 p-5 sm:p-6 space-y-5">
+    <div>
+      <p class="text-[10px] uppercase tracking-[.2em] text-violet-300 font-bold">YouTube publishing kit</p>
+      <h3 class="text-lg font-bold text-white mt-1">Ready to publish</h3>
+      <p class="text-xs text-zinc-400 mt-1">Generated by Gemini from your narration script.</p>
+    </div>
+
+    <div class="space-y-2">
+      <label for="youtubeTitle" class="block text-xs font-semibold text-zinc-300">Catchy YouTube title</label>
+      <textarea id="youtubeTitle" readonly rows="2"
+        class="w-full rounded-xl bg-zinc-950 border border-zinc-800 p-3 text-sm font-semibold text-white resize-y">{{ project.youtube_metadata.title }}</textarea>
+      <button type="button" class="copy-metadata text-[11px] px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200" data-copy-target="youtubeTitle">Copy title</button>
+    </div>
+
+    <div class="space-y-2">
+      <label for="youtubeDescription" class="block text-xs font-semibold text-zinc-300">YouTube description</label>
+      <textarea id="youtubeDescription" readonly rows="7"
+        class="w-full rounded-xl bg-zinc-950 border border-zinc-800 p-3 text-xs text-zinc-200 leading-relaxed resize-y">{{ project.youtube_metadata.description }}</textarea>
+      <button type="button" class="copy-metadata text-[11px] px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200" data-copy-target="youtubeDescription">Copy description</button>
+    </div>
+
+    <div class="space-y-2">
+      <label for="youtubeThumbnailPrompt" class="block text-xs font-semibold text-zinc-300">YouTube thumbnail generation prompt</label>
+      <textarea id="youtubeThumbnailPrompt" readonly rows="7"
+        class="w-full rounded-xl bg-zinc-950 border border-zinc-800 p-3 text-xs text-zinc-200 leading-relaxed resize-y">{{ project.youtube_metadata.thumbnail_prompt }}</textarea>
+      <button type="button" class="copy-metadata text-[11px] px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200" data-copy-target="youtubeThumbnailPrompt">Copy thumbnail prompt</button>
+    </div>
+
+    <form id="youtubeMetadataForm" class="space-y-2">
+      {% csrf_token %}
+      <p id="youtubeMetadataStatus" class="text-xs {% if project.youtube_metadata_error %}text-rose-300{% else %}text-zinc-500{% endif %}" role="status">
+        {% if project.youtube_metadata_error %}
+          Gemini metadata generation failed: {{ project.youtube_metadata_error }}
+        {% elif not project.youtube_metadata.title %}
+          YouTube metadata has not been generated yet.
+        {% endif %}
+      </p>
+      <button id="generateYoutubeMetadata" type="submit"
+        class="px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold">
+        {% if project.youtube_metadata.title %}Regenerate YouTube metadata{% else %}Generate YouTube metadata{% endif %}
+      </button>
+    </form>
   </section>
-  <section class="grid grid-cols-1 sm:grid-cols-2 gap-3">{% for scene in project.scenes_data %}<article class="p-3 rounded-xl bg-zinc-900 border border-zinc-800 flex gap-3"><img class="w-16 h-20 object-cover rounded" src="{{ scene.image_url }}"><div><p class="text-[10px] font-bold text-violet-300">SCENE {{ scene.id }}</p><p class="text-xs text-zinc-300 mt-1">{{ scene.text }}</p></div></article>{% endfor %}</section>
+  {% endif %}
+
+  {% if project.scenes_data and project.render_status != 'COMPLETED' %}
+  <section class="space-y-3">
+    <h3 class="text-xs font-bold uppercase tracking-widest text-zinc-500">Scene breakdown</h3>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {% for scene in project.scenes_data %}
+      <article class="flex gap-3 p-3 rounded-xl bg-zinc-900 border border-zinc-800">
+        <img src="{{ scene.image_url }}" alt="Scene {{ scene.id }}"
+             class="w-16 h-20 object-cover rounded-lg shrink-0 bg-zinc-800">
+        <div class="min-w-0 space-y-1">
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] font-bold text-violet-300 uppercase tracking-wider">Scene {{ scene.id }}</span>
+            {% if scene.movement %}
+            <span class="text-[9px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">{{ scene.movement|title }}</span>
+            {% endif %}
+            {% if scene.duration_seconds %}
+            <span class="text-[9px] text-zinc-600 ml-auto">{{ scene.duration_seconds }}s</span>
+            {% endif %}
+          </div>
+          <p class="text-xs text-zinc-300 leading-relaxed line-clamp-4">{{ scene.text }}</p>
+          {% if scene.image_prompt %}
+          <div class="pt-1">
+            <span class="text-[9px] font-semibold text-violet-400 block mb-0.5">AI Image Prompt:</span>
+            <p class="text-[10px] text-zinc-400 font-mono bg-zinc-950 p-1.5 rounded border border-zinc-800 line-clamp-2 select-all">{{ scene.image_prompt }}</p>
+          </div>
+          {% endif %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if project.render_status == 'RENDERING' %}
+<script>
+const PROJECT_ID   = {{ project.pk }};
+const POLL_URL     = "{% url 'studio_render_progress' 'narration' project.pk %}";
+const DETAIL_URL   = window.location.href;
+const startedAt    = Date.now();
+
+const bar          = document.getElementById('progressBar');
+const stepEl       = document.getElementById('progressStep');
+const pctEl        = document.getElementById('progressPct');
+const elapsedEl    = document.getElementById('elapsedTime');
+
+/* live elapsed timer */
+setInterval(() => {
+  const s = Math.floor((Date.now() - startedAt) / 1000);
+  elapsedEl.textContent = s < 60 ? `${s}s` : `${Math.floor(s/60)}m ${s%60}s`;
+}, 1000);
+
+/* progress poller */
+let lastPct = 3;
+async function poll() {
+  try {
+    const resp = await fetch(POLL_URL);
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    const pct  = Math.max(lastPct, data.pct  ?? data.percent ?? 0);
+    const step = data.step ?? data.message ?? '';
+    lastPct = pct;
+
+    bar.style.width    = pct + '%';
+    pctEl.textContent  = pct + '%';
+    stepEl.textContent = step || 'Processing…';
+
+    /* finished states → reload page to show final UI */
+    const status = (data.status || '').toUpperCase();
+    if (pct >= 100 || status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED') {
+      stepEl.textContent = pct >= 100 ? 'Finishing up…' : step;
+      bar.style.width = '100%';
+      setTimeout(() => window.location.reload(), 1200);
+      return;
+    }
+  } catch (_) {}
+  setTimeout(poll, 2000);
+}
+
+poll();
+</script>
+{% endif %}
+{% if project.render_status == 'COMPLETED' and project.output_video %}
+<script>
+const metadataForm = document.getElementById('youtubeMetadataForm');
+const metadataStatus = document.getElementById('youtubeMetadataStatus');
+const metadataButton = document.getElementById('generateYoutubeMetadata');
+
+document.querySelectorAll('.copy-metadata').forEach(button => {
+  button.addEventListener('click', async () => {
+    const field = document.getElementById(button.dataset.copyTarget);
+    if (!field || !field.value) return;
+    await navigator.clipboard.writeText(field.value);
+    const originalText = button.textContent;
+    button.textContent = 'Copied!';
+    setTimeout(() => { button.textContent = originalText; }, 1500);
+  });
+});
+
+metadataForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  metadataButton.disabled = true;
+  metadataButton.textContent = 'Generating with Gemini…';
+  metadataStatus.textContent = '';
+  metadataStatus.className = 'text-xs text-zinc-500';
+
+  try {
+    const response = await fetch("{% url 'narration_generate_youtube_metadata' project.pk %}", {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': metadataForm.querySelector('[name=csrfmiddlewaretoken]').value
+      }
+    });
+    const result = await response.json();
+    if (!response.ok || !result.success) throw new Error(result.error || 'Gemini metadata generation failed.');
+
+    document.getElementById('youtubeTitle').value = result.data.title;
+    document.getElementById('youtubeDescription').value = result.data.description;
+    document.getElementById('youtubeThumbnailPrompt').value = result.data.thumbnail_prompt;
+    metadataStatus.textContent = 'YouTube publishing kit generated from the script.';
+    metadataStatus.className = 'text-xs text-emerald-300';
+    metadataButton.textContent = 'Regenerate YouTube metadata';
+  } catch (error) {
+    metadataStatus.textContent = error.message;
+    metadataStatus.className = 'text-xs text-rose-300';
+    metadataButton.textContent = 'Try generating again';
+  } finally {
+    metadataButton.disabled = false;
+  }
+});
+</script>
+{% endif %}
 {% endblock %}

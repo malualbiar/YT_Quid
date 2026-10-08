@@ -57,4 +57,5 @@ urllib3==2.7.0
 waitress==3.0.2
 whitenoise==6.9.0
 yt-dlp==2026.8.19
-kokoro>=0.9.4
+edge-tts>=0.9.4
+edge-tts

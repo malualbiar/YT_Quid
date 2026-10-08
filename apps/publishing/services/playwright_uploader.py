@@ -50,7 +50,17 @@ class PlaywrightStudioUploader:
         try:
             with sync_playwright() as p:
                 logger.info(f"Launching Playwright browser context for Job #{job.id}...")
-                
+
+                # Pre-flight: verify Chromium is installed
+                try:
+                    browser_exe = p.chromium.executable_path
+                    if not os.path.exists(browser_exe):
+                        raise FileNotFoundError(browser_exe)
+                except Exception:
+                    raise RuntimeError(
+                        "Chromium browser not installed. Fix: run  python -m playwright install chromium"
+                    )
+
                 # Launch persistent browser context (retains Google Studio login)
                 context = p.chromium.launch_persistent_context(
                     user_data_dir=user_data_dir,

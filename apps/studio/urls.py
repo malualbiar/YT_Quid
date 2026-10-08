@@ -7,7 +7,15 @@ urlpatterns = [
     path('studio/', views.studio_home_view, name='studio_home'),
     path('studio/render/', views.studio_render_view, name='studio_render'),
     path('studio/narration/', views.narration_maker_view, name='narration_maker'),
+    path('studio/narration/preview-voice/', views.narration_preview_voice_view, name='narration_preview_voice'),
+    path('studio/narration/structure-script/', views.narration_ai_structure_script_view, name='narration_ai_structure_script'),
+    path('studio/narration/reorder-scenes/', views.narration_reorder_scenes_view, name='narration_reorder_scenes'),
+    path('studio/narration/synthesize-audio/', views.narration_synthesize_all_audio_view, name='narration_synthesize_all_audio'),
+    path('studio/narration/synthesize-scene-audio/', views.narration_synthesize_scene_audio_view, name='narration_synthesize_scene_audio'),
     path('studio/narration/render/', views.narration_render_view, name='narration_render'),
+    path('studio/narration/generate-prompts/', views.narration_generate_prompts_view, name='narration_generate_prompts'),
+    path('studio/narration/<int:pk>/generate-youtube-metadata/', views.narration_generate_youtube_metadata_view, name='narration_generate_youtube_metadata'),
+    path('studio/narration/<int:pk>/download/', views.narration_download_video_view, name='narration_download_video'),
     path('studio/narration/<int:pk>/', views.narration_detail_view, name='narration_detail'),
     path('studio/<int:pk>/delete/', views.studio_delete_view, name='studio_delete'),
 
@@ -55,5 +63,3 @@ urlpatterns = [
     path('studio/automation/<int:pk>/status/', views.automation_status_api, name='automation_status_api'),
     path('studio/automation/<int:pk>/delete/', views.automation_delete_view, name='automation_delete'),
 ]
-
-
